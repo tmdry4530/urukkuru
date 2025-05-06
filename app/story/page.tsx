@@ -1,38 +1,38 @@
-"use client"
+"use client";
 
-import { useState, useEffect, useRef } from "react"
-import Image from "next/image"
-import { PageLayout } from "@/components/page-layout"
+import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
+import { PageLayout } from "@/components/page-layout";
 
 export default function StoryPage() {
-  const [visibleSections, setVisibleSections] = useState<number[]>([])
-  const sectionRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [visibleSections, setVisibleSections] = useState<number[]>([]);
+  const sectionRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            const index = Number(entry.target.getAttribute("data-index"))
+            const index = Number(entry.target.getAttribute("data-index"));
             if (!visibleSections.includes(index)) {
-              setVisibleSections((prev) => [...prev, index])
+              setVisibleSections((prev) => [...prev, index]);
             }
           }
-        })
+        });
       },
-      { threshold: 0.3 },
-    )
+      { threshold: 0.3 }
+    );
 
     sectionRefs.current.forEach((ref) => {
-      if (ref) observer.observe(ref)
-    })
+      if (ref) observer.observe(ref);
+    });
 
     return () => {
       sectionRefs.current.forEach((ref) => {
-        if (ref) observer.unobserve(ref)
-      })
-    }
-  }, [visibleSections])
+        if (ref) observer.unobserve(ref);
+      });
+    };
+  }, [visibleSections]);
 
   const storyParagraphs = [
     {
@@ -60,7 +60,7 @@ export default function StoryPage() {
       content:
         "이제 URUK은 단순한 로터리를 넘어, 디지털 경제의 새로운 패러다임을 제시하고 있습니다. 지속적인 기술 혁신과 커뮤니티의 참여로, URUK은 계속해서 진화하고 있습니다. 미래에는 어떤 모습으로 우리 앞에 나타날지, 그 여정은 지금도 계속되고 있습니다.",
     },
-  ]
+  ];
 
   return (
     <PageLayout>
@@ -82,7 +82,9 @@ export default function StoryPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#1a0028] to-transparent"></div>
           <div className="absolute bottom-0 left-0 w-full p-6">
-            <h2 className="text-2xl md:text-3xl font-bold text-white drop-shadow-lg">사이버펑크 세계의 URUK</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-white drop-shadow-lg">
+              사이버펑크 세계의 URUK
+            </h2>
           </div>
         </div>
 
@@ -101,7 +103,9 @@ export default function StoryPage() {
                 {paragraph.title}
                 <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
               </h3>
-              <p className="text-gray-200 leading-relaxed">{paragraph.content}</p>
+              <p className="text-gray-200 leading-relaxed">
+                {paragraph.content}
+              </p>
             </div>
           ))}
         </div>
@@ -111,7 +115,9 @@ export default function StoryPage() {
           ref={(el) => (sectionRefs.current[storyParagraphs.length] = el)}
           data-index={storyParagraphs.length}
           className={`bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-8 mb-12 text-center transition-opacity duration-1000 ${
-            visibleSections.includes(storyParagraphs.length) ? "opacity-100" : "opacity-0"
+            visibleSections.includes(storyParagraphs.length)
+              ? "opacity-100"
+              : "opacity-0"
           }`}
         >
           <blockquote className="text-xl md:text-2xl italic text-purple-200 mb-4">
@@ -125,7 +131,9 @@ export default function StoryPage() {
           ref={(el) => (sectionRefs.current[storyParagraphs.length + 1] = el)}
           data-index={storyParagraphs.length + 1}
           className={`text-center mb-8 transition-opacity duration-1000 ${
-            visibleSections.includes(storyParagraphs.length + 1) ? "opacity-100" : "opacity-0"
+            visibleSections.includes(storyParagraphs.length + 1)
+              ? "opacity-100"
+              : "opacity-0"
           }`}
         >
           <h3 className="text-2xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-pink-400 to-purple-400 animate-gradient">
@@ -137,5 +145,5 @@ export default function StoryPage() {
         </div>
       </div>
     </PageLayout>
-  )
+  );
 }

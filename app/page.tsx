@@ -44,7 +44,7 @@ export default function Home() {
         {/* Timer Box */}
         <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 flex flex-col items-center justify-center shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow">
           <h3 className="text-lg font-medium text-purple-200 mb-3">
-            이번 뽑깟 남은시간
+            Countdown
           </h3>
           <div className="text-4xl font-bold text-white flex items-center">
             <span>{String(countdown.minutes).padStart(2, "0")}</span>
@@ -55,15 +55,12 @@ export default function Home() {
 
         {/* Center Logo */}
         <div className="flex flex-col items-center justify-center">
-          <h1 className="text-5xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 animate-gradient">
-            URUK
-          </h1>
-          <div className="relative w-48 h-48">
+          <div className="relative w-96 h-96">
             <Image
-              src="/placeholder.svg?height=192&width=192"
+              src="/URUK_1.gif"
               alt="URUK Cat Logo"
-              width={192}
-              height={192}
+              width={640}
+              height={640}
               className="object-contain"
               style={{
                 filter: `drop-shadow(0 0 ${
@@ -77,20 +74,20 @@ export default function Home() {
         {/* Leaderboard Box */}
         <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow">
           <h3 className="text-lg font-medium text-purple-200 mb-3 text-center">
-            리더보드
+            Leaderboard
           </h3>
           <div className="space-y-2">
             {[1, 2, 3, 4].map((rank) => (
               <div key={rank} className="flex justify-between items-center">
-                <span className="text-sm">{rank}등</span>
+                <span className="text-sm">{rank}th</span>
                 <span className="text-sm text-gray-400">-</span>
               </div>
             ))}
             <div className="mt-4 pt-4 border-t border-purple-500/30">
               <div className="flex justify-between items-center">
-                <span className="text-sm">토큰 누적 당첨수</span>
+                <span className="text-sm">Total Prize Pool</span>
                 <span className="text-sm font-medium text-pink-400">
-                  10000000 개
+                  10000000 $URUK
                 </span>
               </div>
             </div>
@@ -109,13 +106,13 @@ export default function Home() {
             type="text"
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
-            placeholder="수량입력"
+            placeholder="Enter quantity"
             className="w-full bg-black/30 border border-purple-500/50 rounded-md py-3 px-4 text-white placeholder-purple-300/50 focus:outline-none focus:ring-2 focus:ring-pink-500/50 focus:border-transparent"
           />
         </div>
 
         <button className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium py-3 px-6 rounded-md transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-blue-600/30">
-          제출
+          Submit
         </button>
       </div>
 

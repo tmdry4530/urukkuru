@@ -1,11 +1,11 @@
-import { Twitter } from "lucide-react"
+import { Twitter } from "lucide-react";
 
 export function Footer() {
   return (
     <>
       {/* Announcement Bar */}
       <div className="w-full bg-gradient-to-r from-pink-900/30 to-purple-900/30 backdrop-blur-sm py-3 px-4 text-center text-sm">
-        제 1회 당첨자 : OOO 몇개 당첨 / 당첨자 이름이랑 몇개 당첨인지 나오게 전광판으로 굴러가기?
+        Winner of the first draw: Ox n $URUK
       </div>
 
       {/* Footer */}
@@ -18,10 +18,10 @@ export function Footer() {
           </div>
 
           <button className="bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-medium py-2 px-6 rounded-md transition-all duration-300 transform hover:scale-105">
-            토큰구매
+            Buy Token
           </button>
         </div>
       </footer>
     </>
-  )
+  );
 }
