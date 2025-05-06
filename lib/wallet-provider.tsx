@@ -42,7 +42,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <WagmiConfig config={wagmiConfig}>
-        <RainbowKitProvider>{children}</RainbowKitProvider>
+        <RainbowKitProvider locale="en-US">{children}</RainbowKitProvider>
       </WagmiConfig>
     </QueryClientProvider>
   );
