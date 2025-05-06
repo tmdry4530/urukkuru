@@ -2,25 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 26, 0, 40;
-  --background-end-rgb: 0, 0, 0;
+/* Joystix 폰트 정의 */
+@font-face {
+  font-family: "Joystix Monospace";
+  /* 사용자가 public/fonts/joystix-monospace.otf 에 파일을 위치시켰다고 가정 */
+  src: url("/fonts/joystix-monospace.otf") format("opentype");
+  /* WOFF2 형식이 있다면 아래와 같이 추가하는 것이 좋습니다.
+  src: url('/fonts/joystix-monospace.woff2') format('woff2'),
+       url('/fonts/joystix-monospace.otf') format('opentype'); 
+  */
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
-}
+@layer base {
+  body {
+    @apply bg-slate-900 text-slate-50;
+    font-family: "Joystix Monospace", "Courier New", "Courier", monospace; /* Courier를 따옴표로 감쌈 */
+  }
 
-@layer utilities {
-  .animate-gradient {
-    background-size: 200% 200%;
-    animation: gradient 8s ease infinite;
+  /* 다른 기본 스타일이 필요하다면 여기에 추가 */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: "Joystix Monospace", "Courier New", "Courier", monospace; /* Courier를 따옴표로 감쌈 */
+  }
+
+  input,
+  button,
+  select,
+  textarea {
+    font-family: "Joystix Monospace", "Courier New", "Courier", monospace; /* Courier를 따옴표로 감쌈 */
   }
 }
 
-@keyframes gradient {
+/* 기존의 다른 전역 스타일이 있다면 여기에 유지 */
+
+.animate-gradient {
+  background-size: 300%;
+  -webkit-animation: animatedgradient 6s ease infinite alternate;
+  -moz-animation: animatedgradient 6s ease infinite alternate;
+  animation: animatedgradient 6s ease infinite alternate;
+}
+
+@keyframes animatedgradient {
   0% {
     background-position: 0% 50%;
   }

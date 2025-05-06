@@ -4,6 +4,7 @@ import { Pixelify_Sans } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet-provider";
 import "@rainbow-me/rainbowkit/styles.css";
+import { Toaster } from "react-hot-toast";
 
 const pixelifySans = Pixelify_Sans({
   subsets: ["latin"],
@@ -84,7 +85,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={pixelifySans.className}>
-        <WalletProvider>{children}</WalletProvider>
+        <WalletProvider>
+          {children}
+          <Toaster position="bottom-right" />
+        </WalletProvider>
       </body>
     </html>
   );
