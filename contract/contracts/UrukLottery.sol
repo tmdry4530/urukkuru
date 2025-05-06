@@ -16,7 +16,7 @@ contract UrukLottery is Ownable, ReentrancyGuard {
 
     uint256 public constant DEV_FEE_BPS = 250; // 2.5?%
     uint256 public constant BPS_DENOM = 10_000;
-    uint256 public constant ROUND_SPAN = 10 minutes; // 3분에서 10분으로 변경
+    uint256 public constant ROUND_SPAN = 6 hours; // 3분에서 10분으로 변경
 
     IERC20Metadata public immutable uruk;
     uint256 public immutable ticketUnit; // 1 URUK (???)

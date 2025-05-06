@@ -46,8 +46,14 @@ export function PageLayout({ children }: PageLayoutProps) {
     setParticleStyles(styles);
   }, []);
 
+  // Value for top padding to accommodate header height (ensure Tailwind JIT compiler recognizes classes like py-16)
+  // This value might need adjustment based on the actual header height.
+  // Assuming current header py-2 is approx. 0.5rem * 2 = 1rem, plus logo height, etc., roughly 64px (4rem) => pt-16 (4rem)
+  // Alternatively, the actual height could be calculated in the Header component and passed dynamically.
+  const headerHeightPadding = "pt-16 md:pt-20"; // Mobile and desktop header heights might differ
+
   return (
-    <div className="flex flex-col min-h-screen bg-[#1a0028] text-white overflow-hidden relative">
+    <div className="flex flex-col min-h-screen bg-gradient-to-b from-purple-900/5 to-black">
       {/* Background gradient effect */}
       <div
         className="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-black/40 z-0"
@@ -68,8 +74,9 @@ export function PageLayout({ children }: PageLayoutProps) {
       )}
 
       <Header />
-      <main className="flex-1 flex flex-col z-10 px-4 py-8 md:py-12 min-h-[calc(100vh-200px)]">
-        {children}
+      {/* Main content area with padding for header height + full width and centered */}
+      <main className={`flex-grow relative z-10 w-full ${headerHeightPadding}`}>
+        <div className="container mx-auto px-4">{children}</div>
       </main>
       <Footer />
     </div>

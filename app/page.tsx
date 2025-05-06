@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import Image from "next/image";
 import { PageLayout } from "@/components/page-layout";
 import {
@@ -15,13 +15,14 @@ import {
 } from "wagmi";
 import { parseUnits, formatUnits, maxUint256 } from "viem";
 import toast from "react-hot-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
-// UrukLottery 컨트랙트 ABI
+// UrukLottery Contract ABI
 import UrukLotteryABIFile from "@/abi/UrukLottery.abi.json";
 const UrukLotteryABI = UrukLotteryABIFile.abi as any[];
 
-// TODO: 실제 URUK 토큰 ABI로 교체 필수! (json 파일 import 권장)
-// 표준 JSON ABI 형식으로 수정
+// TODO: Replace with actual URUK Token ABI! (JSON file import recommended)
+// Modified to standard JSON ABI format
 const UrukTokenABI: any[] = [
   {
     inputs: [
@@ -68,12 +69,12 @@ const urukTokenAddress = process.env.NEXT_PUBLIC_URUK_TOKEN as
 const targetChainIdFromEnv = parseInt(
   process.env.NEXT_PUBLIC_CHAIN_ID || "10143",
   10
-); // 기본값 Monad Testnet ID, 10진수
+); // Default Monad Testnet ID, decimal
 
-// TODO: 실제 리더보드 API 엔드포인트 URL로 변경 필요
-const LEADERBOARD_API_URL = "/api/leaderboard?roundId="; // 예시 API 경로
+// TODO: Change to actual leaderboard API endpoint URL
+const LEADERBOARD_API_URL = "/api/leaderboard?roundId="; // Example API path
 
-// 주소 축약 유틸리티 함수
+// Address truncation utility function
 const truncateAddress = (address: string) => {
   if (!address) return "";
   return `${address.substring(0, 6)}...${address.substring(
@@ -81,18 +82,18 @@ const truncateAddress = (address: string) => {
   )}`;
 };
 
-// API 응답 데이터 타입 정의 (실제 API 응답 구조에 맞게 수정 필요)
+// API response data type definition (needs modification according to actual API response structure)
 interface LeaderboardEntry {
   rank: number;
   address: string;
-  tickets: number | string; // API 응답 형식에 따라 number 또는 string
+  tickets: number | string; // number or string depending on API response format
 }
 
-// 블록 탐색기 URL 생성 함수 (Monad Testnet 기준)
+// Block explorer URL generation function (based on Monad Testnet)
 const getExplorerUrl = (txHash: string) =>
   `https://testnet.monadexplorer.com/tx/${txHash}`;
 
-// 이벤트 리스너를 통한 리더보드 데이터 구성을 위한 인터페이스
+// Interface for configuring leaderboard data via event listener
 interface TicketPurchaseEvent {
   roundId: bigint;
   player: string;
@@ -103,24 +104,24 @@ interface TicketPurchaseEvent {
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [countdown, setCountdown] = useState<{
+    hours: number;
     minutes: number;
     seconds: number;
   } | null>(null);
   const [roundEndTime, setRoundEndTime] = useState<number | null>(null); // Unix timestamp (seconds)
-  // 서버 시간과 로컬 시간의 차이 저장 (단위: 초)
+  // Store the difference between server time and local time (unit: seconds)
   const [timeOffset, setTimeOffset] = useState<number>(0);
-  // 마지막으로 처리된 라운드 ID를 저장
+  // Store the last processed round ID
   const [lastProcessedRoundId, setLastProcessedRoundId] = useState<
     string | null
   >(null);
-  // 새 라운드 알림 표시 여부 제어
+  // Control whether to display the new round notification
   const [showingNewRoundAlert, setShowingNewRoundAlert] =
     useState<boolean>(false);
 
   const [quantity, setQuantity] = useState("");
   const [glowIntensity, setGlowIntensity] = useState(1);
 
-  const [isTransactionProcessing, setIsTransactionProcessing] = useState(false);
   const [currentTransactionStep, setCurrentTransactionStep] = useState<
     | ""
     | "preparing"
@@ -256,7 +257,7 @@ export default function Home() {
     chainId: targetChainIdFromEnv,
     query: {
       enabled: !!lotteryAddress && isConnected && isCorrectNetwork && isClient,
-      staleTime: 1000 * 60 * 3, // 3분으로 증가 (RPC 요청 최적화)
+      staleTime: 1000 * 60 * 60 * 6, // 6 hours
     },
   });
   const activeRoundId = activeRoundIdData as bigint | undefined;
@@ -270,32 +271,51 @@ export default function Home() {
     address: lotteryAddress,
     abi: UrukLotteryABI,
     functionName: "roundEnd",
-    args: activeRoundId !== undefined ? [activeRoundId] : undefined,
+    args: activeRoundId !== undefined ? [activeRoundId] : undefined, // This query may auto-refresh if activeRoundId changes
     chainId: targetChainIdFromEnv,
     query: {
       enabled:
         !!lotteryAddress &&
-        activeRoundId !== undefined &&
+        activeRoundId !== undefined && // Should be called only if activeRoundId exists
         isConnected &&
         isCorrectNetwork &&
         isClient,
-      staleTime: 1000 * 60 * 3, // 3분으로 증가 (RPC 요청 최적화)
+      staleTime: 1000 * 60 * 60 * 6, // 6 hours
     },
   });
 
-  // Set roundEndTime state when data is available
+  // Set roundEndTime state when data is available (modified part)
   useEffect(() => {
     if (roundEndTimeData !== undefined && roundEndTimeData !== null) {
       try {
-        // Ensure conversion from potential bigint to number
-        setRoundEndTime(Number(roundEndTimeData));
+        const newEndTime = Number(roundEndTimeData);
+        // Update only if the current state is different from the new end time to prevent unnecessary re-renders
+        if (roundEndTime !== newEndTime) {
+          setRoundEndTime(newEndTime);
+          console.log(
+            "[EFFECT roundEndTimeData] New round end time set:",
+            newEndTime,
+            "from data:",
+            roundEndTimeData
+          );
+        }
       } catch (e) {
-        console.error("Error converting roundEndTimeData to number:", e);
-        setRoundEndTime(null);
+        console.error(
+          "[EFFECT roundEndTimeData] Error converting roundEndTimeData to number:",
+          e
+        );
+        // 오류 발생 시에도, 현재 roundEndTime이 null이 아니라면 null로 설정하여 일관성 유지 시도
+        if (roundEndTime !== null) setRoundEndTime(null);
       }
-    } else {
+    } else if (roundEndTimeData === null && roundEndTime !== null) {
+      // If the contract returns null (or 0), and the current state is not null (e.g., previous round value)
+      // This case ensures that if the contract explicitly clears the end time, the state reflects it.
       setRoundEndTime(null);
+      console.log(
+        "[EFFECT roundEndTimeData] Round end time explicitly reset to null from contract data."
+      );
     }
+    // 의존성 배열에서 roundEndTime 제거. 오직 roundEndTimeData 변경에만 반응.
   }, [roundEndTimeData]);
 
   // Get Owned Tickets for the active round (using the newly added getTicketsOf)
@@ -325,7 +345,7 @@ export default function Home() {
   });
   const ownedTickets = ownedTicketsData as bigint | undefined;
 
-  // --- 로터리 풀의 URUK 잔액 (총 상금) ---
+  // --- URUK balance of the lottery pool (total prize) ---
   const {
     data: lotteryPoolBalanceData,
     isLoading: isLoadingLotteryPoolBalance,
@@ -351,7 +371,7 @@ export default function Home() {
 
   const lotteryPoolBalanceFormatted =
     lotteryPoolBalance !== undefined && urukDecimals !== undefined
-      ? formatUnits(lotteryPoolBalance, urukDecimals) // 소수점 포맷은 필요에 따라 조정
+      ? formatUnits(lotteryPoolBalance, urukDecimals) // Adjust decimal format as needed
       : "0";
 
   // --- Approve Transaction ---
@@ -428,45 +448,60 @@ export default function Home() {
       chainId: targetChainIdFromEnv,
     });
 
-  // 트랜잭션 성공 후 데이터 갱신을 위한 useEffect 추가
+  // isTransactionProcessing 상태를 useMemo로 변경
+  const isTransactionProcessing = useMemo(
+    () =>
+      isApproving ||
+      isConfirmingApprove ||
+      isBuyingTickets ||
+      isConfirmingBuyTickets,
+    [isApproving, isConfirmingApprove, isBuyingTickets, isConfirmingBuyTickets]
+  );
+
+  // Added useEffect to refresh data after successful transaction
   useEffect(() => {
     if (isSuccessBuyTickets) {
       console.log(
-        "[TransactionSuccess] 티켓 구매 트랜잭션 성공, 데이터 갱신 시작"
+        "[TransactionSuccess] Ticket purchase transaction successful, starting data refresh"
       );
 
-      // 토스트 메시지로 성공 알림
-      toast.success("티켓 구매 완료! 데이터를 갱신합니다...");
+      // Notify success with a toast message
+      toast.success("Ticket purchase complete! Refreshing data...");
 
-      // 상태 변경
+      // Change state
       setCurrentTransactionStep("completed");
-      setIsTransactionProcessing(false);
 
-      // 약간의 지연 후 데이터 갱신 (블록체인 상태 반영 시간 고려)
+      // Refresh data after a short delay (considering blockchain state reflection time)
       setTimeout(async () => {
         try {
-          // 소유한 티켓 수량 갱신
+          // Refresh owned ticket quantity
           const ticketsResult = await refetchOwnedTickets();
-          console.log("[DataRefresh] 티켓 수량 갱신 결과:", ticketsResult);
+          console.log(
+            "[DataRefresh] Ticket quantity refresh result:",
+            ticketsResult
+          );
 
-          // 로터리 풀 잔액(총 상금) 갱신
+          // Refresh lottery pool balance (total prize)
           const poolResult = await refetchLotteryPoolBalance();
-          console.log("[DataRefresh] 로터리 풀 잔액 갱신 결과:", poolResult);
+          console.log(
+            "[DataRefresh] Lottery pool balance refresh result:",
+            poolResult
+          );
 
-          // URUK 토큰 잔액 갱신
+          // Refresh URUK token balance
           await refetchUrukBalance();
 
-          // URUK 토큰 허용량 갱신
+          // Refresh URUK token allowance
           await refetchUrukAllowance();
 
-          toast.success("데이터 갱신 완료!");
+          toast.success("Data refresh complete!");
         } catch (error) {
-          console.error("[DataRefresh] 데이터 갱신 중 오류 발생:", error);
+          console.error("[DataRefresh] Error during data refresh:", error);
           toast.error(
-            "일부 데이터를 갱신하지 못했습니다. 페이지를 새로고침해 보세요."
+            "Failed to refresh some data. Please try refreshing the page."
           );
         }
-      }, 2000); // 2초 지연
+      }, 2000); // 2-second delay
     }
   }, [
     isSuccessBuyTickets,
@@ -476,7 +511,7 @@ export default function Home() {
     refetchUrukAllowance,
   ]);
 
-  // Animate glow effect (기존 로직 유지)
+  // Animate glow effect (existing logic maintained)
   useEffect(() => {
     const interval = setInterval(() => {
       setGlowIntensity((prev) => {
@@ -487,37 +522,37 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // 서버 시간을 가져오는 함수
+  // Function to get server time
   const fetchServerTime = useCallback(async () => {
     try {
-      // Next.js API 경로를 통해 백엔드 서버 시간 요청
+      // Request backend server time via Next.js API path
       const response = await fetch("/api/server-time", {
-        cache: "no-store", // 항상 최신 데이터
+        cache: "no-store", // Always latest data
         headers: { "Cache-Control": "no-cache" },
       });
 
       if (!response.ok) {
-        throw new Error("서버 시간 가져오기 실패");
+        throw new Error("Failed to get server time");
       }
       const data = await response.json();
 
-      // 시간 출처 확인 (백엔드 또는 Next.js 폴백)
+      // Check time source (backend or Next.js fallback)
       const timeSource =
-        data.source === "next-fallback" ? "Next.js 폴백" : "백엔드 서버";
+        data.source === "next-fallback" ? "Next.js Fallback" : "Backend Server";
 
-      // 서버 시간과 로컬 시간의 차이 계산 (초 단위)
+      // Calculate difference between server time and local time (in seconds)
       const localTime = Math.floor(Date.now() / 1000);
       const serverTime = data.timestamp;
       const offset = serverTime - localTime;
 
       console.log(
-        `[ServerTime] ${timeSource} 시간: ${serverTime}, 로컬 시간: ${localTime}, 오프셋: ${offset}초`
+        `[ServerTime] ${timeSource} Time: ${serverTime}, Local Time: ${localTime}, Offset: ${offset}s`
       );
 
-      // 백엔드 연결이 안 됐을 경우 경고 표시 (선택적)
+      // Display warning if backend connection failed (optional)
       if (data.source === "next-fallback") {
         console.warn(
-          "[ServerTime] 백엔드 서버에 연결할 수 없어 Next.js 서버 시간을 사용합니다."
+          "[ServerTime] Could not connect to backend server, using Next.js server time."
         );
       }
 
@@ -525,180 +560,208 @@ export default function Home() {
 
       return { serverTime, offset, source: timeSource };
     } catch (error) {
-      console.error("[ServerTime] 서버 시간 가져오기 오류:", error);
-      // 오류 발생 시 오프셋 0으로 설정하여 로컬 시간 사용
+      console.error("[ServerTime] Error fetching server time:", error);
+      // Set offset to 0 to use local time on error
       return {
         serverTime: Math.floor(Date.now() / 1000),
         offset: 0,
-        source: "로컬 시간(오류)",
+        source: "Local Time (Error)",
       };
     }
   }, []);
 
-  // 컴포넌트 마운트 시 서버 시간 동기화
+  // Synchronize server time on component mount
   useEffect(() => {
     if (isClient) {
-      console.log("[ServerTime] 초기 서버 시간 동기화 시작");
-      // 초기 로드 시 서버 시간 가져오기
+      console.log("[ServerTime] Initial server time synchronization started");
+      // Get server time on initial load
       fetchServerTime();
 
-      // 2분마다 서버 시간 재동기화 (기존 1분에서 변경)
+      // Re-synchronize server time every 2 minutes (changed from 1 minute)
       const syncInterval = setInterval(() => {
-        console.log("[ServerTime] 정기 서버 시간 동기화 실행");
+        console.log(
+          "[ServerTime] Regular server time synchronization executed"
+        );
         fetchServerTime();
-      }, 120000); // 2분으로 증가
+      }, 120000); // Increased to 2 minutes
 
       return () => clearInterval(syncInterval);
     }
   }, [isClient, fetchServerTime]);
 
-  // UPDATED: Countdown timer - 서버 시간 기준 적용
+  // UPDATED: Countdown timer - server time based
   const calculateCountdown = useCallback(() => {
     if (roundEndTime === null || roundEndTime === undefined) {
       setCountdown(null);
       return true; // Indicate timer should stop if no end time
     }
 
-    // 오프셋이 적용된 현재 시간 계산 (서버 시간 기준)
+    // Calculate current time with offset (server time based)
     const now = Math.floor(Date.now() / 1000) + timeOffset;
     const remainingSeconds = roundEndTime - now;
 
-    // 디버깅용 로그 출력 빈도 조절 (10초 간격 또는 마지막 5초만)
+    // Conditional debug log (every 10 seconds or last 5 seconds)
     if (remainingSeconds % 10 === 0 || remainingSeconds <= 5) {
       console.log(
-        `[Countdown] 현재 라운드 종료 시간: ${roundEndTime}, 현재 시간(서버 기준): ${now}, 남은 시간: ${remainingSeconds}초`
+        `[Countdown] Current round end time: ${roundEndTime}, Current time (server based): ${now}, Remaining: ${remainingSeconds}s`
       );
     }
 
     if (remainingSeconds <= 0) {
-      setCountdown({ minutes: 0, seconds: 0 });
+      setCountdown({ hours: 0, minutes: 0, seconds: 0 });
       return true;
     } else {
-      const minutes = Math.floor(remainingSeconds / 60);
+      const hours = Math.floor(remainingSeconds / 3600);
+      const minutes = Math.floor((remainingSeconds % 3600) / 60);
       const seconds = remainingSeconds % 60;
-      setCountdown({ minutes, seconds });
+      setCountdown({ hours, minutes, seconds });
       return false;
     }
   }, [roundEndTime, timeOffset]);
 
-  useEffect(() => {
-    // 이미 처리 중인지 확인하는 플래그
-    let isProcessing = false;
+  const isProcessingNewRound = useRef(false); // useRef to prevent duplicate processing flag
+  const queryClient = useQueryClient(); // Query Client instance
 
+  useEffect(() => {
     const stopped = calculateCountdown();
-    if (stopped) {
-      // 카운트다운이 종료되었을 때 새 라운드 정보 갱신
+
+    if (
+      stopped &&
+      countdown?.hours === 0 &&
+      countdown?.minutes === 0 &&
+      countdown?.seconds === 0
+    ) {
       const refreshRoundData = async () => {
-        // 이미 처리 중이거나 알림을 표시 중인 경우 건너뜀
-        if (isProcessing || showingNewRoundAlert) {
+        if (isProcessingNewRound.current) {
           console.log(
-            "[Countdown] 이미 처리 중이거나 알림을 표시 중이므로 중복 처리 방지"
+            "[Countdown] Already processing new round. Preventing duplicate execution."
           );
           return;
         }
 
-        isProcessing = true;
-        console.log("[Countdown] 카운트다운 종료, 새 라운드 정보 갱신");
+        console.log(
+          "[Countdown] Countdown ended. Starting new round data refresh."
+        );
+        isProcessingNewRound.current = true;
 
         try {
-          // 활성 라운드 ID 갱신 (서버 시간 동기화 즉시 호출 방지)
-          if (activeRoundId !== undefined) {
-            const currentRoundIdStr = activeRoundId.toString();
-            console.log("[Countdown] 현재 라운드:", currentRoundIdStr);
+          const previousActiveRoundIdString = activeRoundId?.toString();
+          console.log(
+            "[Countdown] Previous round ID:",
+            previousActiveRoundIdString
+          );
 
-            // 이미 처리한 라운드인지 확인
-            if (lastProcessedRoundId === currentRoundIdStr) {
-              console.log(
-                `[Countdown] 라운드 ID ${currentRoundIdStr}는 이미 처리됨. 중복 알림 방지`
-              );
-              isProcessing = false;
-              return;
-            }
+          // Wait for a moment to allow backend to complete draw and contract state to change (e.g., 10 seconds)
+          // This time may need adjustment based on network conditions and backend logic
+          await new Promise((resolve) => setTimeout(resolve, 10000));
 
-            // 중복 알림 방지를 위해 상태 설정
-            setShowingNewRoundAlert(true);
+          // Invalidate cached activeRoundId and roundEnd data to force a refetch
+          console.log(
+            "[Countdown] Attempting to invalidate activeRoundId and roundEnd queries"
+          );
+          await queryClient.invalidateQueries({
+            queryKey: ["readContract", lotteryAddress, "activeRoundId"],
+          });
+          await queryClient.invalidateQueries({
+            queryKey: [
+              "readContract",
+              lotteryAddress,
+              "roundEnd",
+              previousActiveRoundIdString, // Using previous ID for query key
+            ],
+          });
+          console.log(
+            "[Countdown] Query invalidation complete. Awaiting data refresh."
+          );
 
-            // 2초 기다린 후 새 라운드 정보 로드 (블록체인 상태 반영 시간 고려)
-            setTimeout(async () => {
-              try {
-                // 라운드 정보 새로고침
-                const result = await refetchActiveRound();
-                const newRoundId = result.data?.toString();
-                console.log("[Countdown] 새 활성 라운드 ID:", newRoundId);
+          // Directly call refetch functions to try fetching latest data
+          const activeRoundResult = await refetchActiveRound();
+          const newActiveRoundIdString = activeRoundResult.data?.toString();
+          console.log(
+            "[Countdown] Newly fetched round ID:",
+            newActiveRoundIdString
+          );
 
-                // 현재 라운드 ID와 새로 받은 라운드 ID 비교
-                if (newRoundId && newRoundId !== lastProcessedRoundId) {
-                  // 새 라운드 ID 저장
-                  setLastProcessedRoundId(newRoundId);
+          if (
+            newActiveRoundIdString &&
+            newActiveRoundIdString !== previousActiveRoundIdString
+          ) {
+            console.log(
+              `[Countdown] New round #${newActiveRoundIdString} detected! Previous round: #${previousActiveRoundIdString}`
+            );
+            setLastProcessedRoundId(newActiveRoundIdString); // Update to prevent next duplicate processing
 
-                  // 종료 시간 정보 새로고침
-                  const endTimeResult = await refetchEndTime();
-                  console.log(
-                    "[Countdown] 새 라운드 종료 시간:",
-                    endTimeResult.data
-                  );
+            // Add a small delay or check dependency to ensure refetchEndTime gets the correct value after activeRoundId state updates
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // Time for state update reflection
+            const endTimeResult = await refetchEndTime();
+            console.log(
+              "[Countdown] New round end time data:",
+              endTimeResult.data
+            );
 
-                  // 다른 정보도 함께 갱신
-                  await refetchOwnedTickets();
-                  await refetchLotteryPoolBalance();
+            await refetchOwnedTickets();
+            await refetchLotteryPoolBalance();
+            await refetchUrukBalance();
+            await refetchUrukAllowance();
+            await fetchServerTime(); // Synchronize server time
 
-                  // 서버 시간 동기화 (마지막에 한 번만 호출)
-                  await fetchServerTime();
-
-                  toast.success("새 라운드가 시작되었습니다!");
-                } else {
-                  console.log(
-                    "[Countdown] 라운드 ID가 변경되지 않았거나 이미 처리된 라운드, 알림 표시 안함"
-                  );
-                }
-              } catch (error) {
-                console.error("[Countdown] 새 라운드 데이터 갱신 오류:", error);
-              } finally {
-                // 알림 표시 상태 초기화 (3초 후)
-                setTimeout(() => {
-                  setShowingNewRoundAlert(false);
-                  isProcessing = false;
-                }, 3000);
-              }
-            }, 2000);
+            toast.success(`New round #${newActiveRoundIdString} has started!`);
+            setShowingNewRoundAlert(false); // Reset alert state after successful toast
+          } else {
+            console.log(
+              "[Countdown] Round ID has not changed. Previous ID:",
+              previousActiveRoundIdString,
+              "New ID:",
+              newActiveRoundIdString
+            );
+            // If no change, can retry after some time or display message to user
+            // For now, setting showingNewRoundAlert to false to allow next attempt
+            setShowingNewRoundAlert(false);
+            toast("Waiting for the next round...", {
+              duration: 5000,
+              icon: "⏳",
+            });
           }
         } catch (error) {
-          console.error("[Countdown] 라운드 정보 갱신 중 오류:", error);
-          // 오류 발생 시 알림 표시 상태 초기화
+          console.error("[Countdown] Error refreshing new round data:", error);
+          toast.error("Failed to fetch next round information.");
           setShowingNewRoundAlert(false);
-          isProcessing = false;
+        } finally {
+          // Release processing flag after 10-15 seconds in general cases
+          setTimeout(() => {
+            isProcessingNewRound.current = false;
+            console.log("[Countdown] New round processing flag released.");
+          }, 15000);
         }
       };
 
-      // 카운트다운이 끝났을 때만 갱신 실행
-      if (countdown?.minutes === 0 && countdown?.seconds === 0) {
-        refreshRoundData();
-      }
-
+      refreshRoundData();
       return;
     }
 
-    const timer = setInterval(() => {
+    const timerId = setInterval(() => {
       if (calculateCountdown()) {
-        clearInterval(timer);
+        clearInterval(timerId);
       }
     }, 1000);
 
-    return () => clearInterval(timer);
+    return () => clearInterval(timerId);
   }, [
     calculateCountdown,
     countdown,
-    activeRoundId,
+    activeRoundId, // Re-added for previous round ID comparison
+    queryClient,
+    fetchServerTime,
     refetchActiveRound,
     refetchEndTime,
     refetchOwnedTickets,
     refetchLotteryPoolBalance,
-    fetchServerTime,
-    lastProcessedRoundId,
-    showingNewRoundAlert,
+    refetchUrukBalance,
+    refetchUrukAllowance,
+    lotteryAddress,
   ]);
 
-  // Fetch Leaderboard Data (직접 컨트랙트에서 참여자 정보 가져오기)
+  // Fetch Leaderboard Data (fetch participant info directly from contract)
   useEffect(() => {
     if (
       activeRoundId !== undefined &&
@@ -716,13 +779,13 @@ export default function Home() {
             activeRoundId.toString()
           );
 
-          // 직접 RPC 호출로 참가자 목록 가져오기
+          // Directly fetch participant list via RPC call
           const entries: LeaderboardEntry[] = [];
 
-          // 현재 사용자가 있고 티켓이 있는 경우만 추가
+          // Add current user's tickets only if they exist and have tickets
           if (accountAddress && ownedTickets && ownedTickets > BigInt(0)) {
             entries.push({
-              rank: 0, // 나중에 순위 계산
+              rank: 0, // Calculate rank later
               address: accountAddress,
               tickets: ownedTickets.toString(),
             });
@@ -733,17 +796,17 @@ export default function Home() {
             );
           }
 
-          // 가상 데이터 생성 코드 제거 (테스트 데이터 더 이상 사용하지 않음)
-          // 실제 컨트랙트 이벤트나 데이터 필요시 여기에 구현
+          // Removed dummy data generation code (test data no longer used)
+          // Implement here if actual contract events or data are needed
 
-          // 티켓 수에 따라 내림차순 정렬
+          // Sort by ticket count in descending order
           entries.sort((a, b) => {
             const ticketsA = BigInt(a.tickets.toString());
             const ticketsB = BigInt(b.tickets.toString());
             return ticketsB > ticketsA ? 1 : ticketsB < ticketsA ? -1 : 0;
           });
 
-          // 순위 부여
+          // Assign ranks
           entries.forEach((entry, index) => {
             entry.rank = index + 1;
           });
@@ -754,25 +817,23 @@ export default function Home() {
           console.log("[Leaderboard] Processed entries:", entries);
         } catch (error) {
           console.error("[Leaderboard] Error fetching leaderboard:", error);
-          setLeaderboardError(
-            "리더보드 데이터를 불러오는 중 오류가 발생했습니다."
-          );
+          setLeaderboardError("Error fetching leaderboard data.");
           setLeaderboardData([]);
         } finally {
           setIsLoadingLeaderboard(false);
         }
       };
 
-      // 초기 데이터 로드
+      // Initial data load
       fetchLeaderboardData();
 
-      // 30초마다 자동 새로고침
+      // Auto-refresh every 30 seconds
       const intervalId = setInterval(fetchLeaderboardData, 30000);
 
-      // 클린업 함수
+      // Cleanup function
       return () => clearInterval(intervalId);
     } else {
-      // 필요한 데이터가 없을 경우 로딩 상태로 표시
+      // Display loading state if necessary data is missing
       setIsLoadingLeaderboard(true);
       setLeaderboardData([]);
     }
@@ -785,10 +846,10 @@ export default function Home() {
     ownedTickets,
   ]);
 
-  // 클라이언트 객체 초기화를 위한 헬퍼 함수
+  // Helper function to initialize client object
   const waitForClient = async () => {
     try {
-      // viem 또는 wagmi에서 제공하는 클라이언트 객체 가져오기
+      // Get client object provided by viem or wagmi
       const { createPublicClient, http } = await import("viem");
       const publicClient = createPublicClient({
         chain: {
@@ -817,7 +878,7 @@ export default function Home() {
     }
   };
 
-  // 바로 이 아래에 handleQuantityChange 함수를 추가합니다.
+  // Add handleQuantityChange function right below this
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     if (value === "" || /^[0-9]+$/.test(value)) {
@@ -831,33 +892,31 @@ export default function Home() {
     }
   };
 
-  // 바로 이 아래에 handleSubmitTickets 함수를 추가합니다.
+  // Add handleSubmitTickets function right below this
   const handleSubmitTickets = async () => {
     if (!isConnected || !accountAddress) {
-      toast.error("지갑을 연결해주세요.");
+      toast.error("Please connect your wallet.");
       return;
     }
     if (!isCorrectNetwork) {
       toast.error(
-        `네트워크를 ${
+        `Please switch network to ${
           targetChain?.name || `Chain ID: ${targetChainIdFromEnv}`
-        }으로 변경해주세요.`
+        }.`
       );
       return;
     }
     if (!lotteryAddress || !urukTokenAddress) {
-      toast.error(
-        "컨트랙트 주소가 설정되지 않았습니다. 관리자에게 문의하세요."
-      );
+      toast.error("Contract address not set. Please contact administrator.");
       return;
     }
     const numQuantity = parseInt(quantity, 10);
     if (isNaN(numQuantity) || numQuantity <= 0) {
-      toast.error("유효한 수량을 입력해주세요 (1 이상의 정수).");
+      toast.error("Please enter a valid quantity (integer greater than 0).");
       return;
     }
     if (urukDecimals === undefined) {
-      toast.error("토큰 정보를 읽어오는 중입니다. 잠시 후 다시 시도해주세요.");
+      toast.error("Fetching token information. Please try again shortly.");
       return;
     }
 
@@ -865,23 +924,24 @@ export default function Home() {
     setBuyTicketsArgs(undefined);
     resetApprove();
     resetBuyTickets();
-    setIsTransactionProcessing(true);
     setCurrentTransactionStep("preparing");
     console.log("[handleSubmitTickets] Start. Quantity:", numQuantity);
 
     try {
-      // 1 URUK = 1 티켓이라고 가정. 티켓당 가격.
+      // Assume 1 URUK = 1 ticket. Price per ticket.
       const pricePerTicket = parseUnits("1", urukDecimals);
-      // 사용자가 구매하려는 총 티켓 수 (BigInt)
+      // Total number of tickets user wants to buy (BigInt)
       const ticketsToBuyBigInt = BigInt(numQuantity);
-      // 실제로 필요한 총 URUK 양
+      // Total URUK amount actually needed
       const amountNeeded = ticketsToBuyBigInt * pricePerTicket;
 
       console.log(
         `[handleSubmitTickets] Tickets to buy: ${ticketsToBuyBigInt}, Price per ticket: ${pricePerTicket}, Amount needed: ${amountNeeded}`
       );
 
-      const refetchToastId = toast.loading("최신 토큰 허용량을 확인합니다...");
+      const refetchToastId = toast.loading(
+        "Checking latest token allowance..."
+      );
       const {
         data: currentAllowanceUnknown,
         isError: isRefetchError,
@@ -901,17 +961,16 @@ export default function Home() {
         const errorMsg =
           (refetchError as any)?.shortMessage ||
           (refetchError as Error)?.message ||
-          "알 수 없는 오류";
-        toast.error(`최신 허용량 확인 실패: ${errorMsg}`, {
+          "Unknown error";
+        toast.error(`Failed to check latest allowance: ${errorMsg}`, {
           id: refetchToastId,
         });
         setCurrentTransactionStep("error");
-        setIsTransactionProcessing(false);
         return;
       }
 
       const currentAllowance = currentAllowanceUnknown as bigint;
-      toast.success("최신 허용량 확인 완료!", { id: refetchToastId });
+      toast.success("Latest allowance checked!", { id: refetchToastId });
       console.log(
         `[handleSubmitTickets] Fetched current allowance: ${formatUnits(
           currentAllowance,
@@ -919,7 +978,7 @@ export default function Home() {
         )} URUK. Amount needed: ${formatUnits(amountNeeded, urukDecimals)} URUK`
       );
 
-      // 수정된 조건: 현재 허용량이 실제 필요한 총액보다 적은 경우 approve
+      // Modified condition: approve if current allowance is less than the total amount actually needed
       if (currentAllowance < amountNeeded) {
         console.log(
           `[handleSubmitTickets] Allowance ${formatUnits(
@@ -942,10 +1001,10 @@ export default function Home() {
             urukDecimals
           )} URUK. Simulating buyTickets.`
         );
-        // buyTickets 함수는 티켓 개수를 받는다고 가정
+        // Assume buyTickets function takes the number of tickets
         setBuyTicketsArgs([ticketsToBuyBigInt]);
 
-        // 명시적으로 상태 변경 딜레이를 줘서 상태 업데이트가 확실히 반영되도록 함
+        // Explicitly delay state change to ensure state update is reflected
         setTimeout(() => {
           console.log(
             "[handleSubmitTickets] Setting transaction step to startingBuySimulation"
@@ -955,29 +1014,30 @@ export default function Home() {
       }
     } catch (error: any) {
       console.error("[handleSubmitTickets] Error:", error);
-      toast.error(`티켓 준비 중 오류: ${error.message || "알 수 없는 오류"}`);
+      toast.error(
+        `Error preparing tickets: ${error.message || "Unknown error"}`
+      );
       setCurrentTransactionStep("error");
-      setIsTransactionProcessing(false);
     }
   };
 
-  // 로딩 메시지 또는 버튼 비활성화 로직 수정
+  // Modify loading message or button disable logic
   let submitButtonText = "Submit";
   if (isClient) {
     if (isTransactionProcessing) {
       if (currentTransactionStep === "approving")
-        submitButtonText = "승인 중...";
+        submitButtonText = "Approving...";
       else if (currentTransactionStep === "buying")
-        submitButtonText = "구매 중...";
+        submitButtonText = "Buying...";
       else if (currentTransactionStep === "startingBuySimulation")
-        submitButtonText = "준비 중... (시뮬)";
+        submitButtonText = "Preparing... (Sim)";
       else if (currentTransactionStep === "preparing")
-        submitButtonText = "준비 중...";
-      else submitButtonText = "처리 중...";
+        submitButtonText = "Preparing...";
+      else submitButtonText = "Processing...";
     } else if (currentTransactionStep === "completed") {
-      submitButtonText = "구매 완료!";
+      submitButtonText = "Purchase Complete!";
     } else if (currentTransactionStep === "error") {
-      submitButtonText = "오류 발생";
+      submitButtonText = "Error Occurred";
     }
   }
 
@@ -992,31 +1052,12 @@ export default function Home() {
 
   // Format countdown for display
   const countdownDisplay = countdown
-    ? `${String(countdown.minutes).padStart(2, "0")}:${String(
-        countdown.seconds
-      ).padStart(2, "0")}`
-    : "--:--"; // 로딩 또는 종료 시 표시
+    ? `${String(countdown.hours).padStart(2, "0")}:${String(
+        countdown.minutes
+      ).padStart(2, "0")}:${String(countdown.seconds).padStart(2, "0")}`
+    : "--:--:--"; // Display for loading or ended state
   const isCountdownLoading =
     isLoadingActiveRound || isLoadingEndTime || countdown === null;
-
-  // 8. isTransactionProcessing 상태 관리 (단순화)
-  useEffect(() => {
-    const processing =
-      isApproving ||
-      isConfirmingApprove ||
-      isBuyingTickets ||
-      isConfirmingBuyTickets;
-    if (isTransactionProcessing !== processing) {
-      setIsTransactionProcessing(processing);
-    }
-  }, [
-    isApproving,
-    isConfirmingApprove,
-    isBuyingTickets,
-    isConfirmingBuyTickets,
-    isTransactionProcessing,
-    setIsTransactionProcessing,
-  ]);
 
   // DEBUG: useEffect to log critical enabled conditions
   useEffect(() => {
@@ -1028,7 +1069,7 @@ export default function Home() {
     console.log("lotteryAddress:", lotteryAddress);
     console.log("urukTokenAddress:", urukTokenAddress);
     console.log("urukDecimals:", urukDecimals);
-    console.log("activeRoundId (data):", activeRoundIdData); // useReadContract의 data 직접 로깅
+    console.log("activeRoundId (data):", activeRoundIdData); // Log data directly from useReadContract
     console.log("activeRoundId (processed):", activeRoundId);
     console.log("--- END DEBUG ---");
   }, [
@@ -1039,19 +1080,19 @@ export default function Home() {
     lotteryAddress,
     urukTokenAddress,
     urukDecimals,
-    activeRoundIdData, // activeRoundIdData를 의존성 배열에 추가
+    activeRoundIdData, // Add activeRoundIdData to dependency array
     activeRoundId,
   ]);
 
   useEffect(() => {
-    console.log("[useEffect setIsClient] Mount effect triggered."); // 로그 추가
+    console.log("[useEffect setIsClient] Mount effect triggered."); // Log added
     setIsClient(true);
-    console.log("[useEffect setIsClient] setIsClient(true) called."); // 로그 추가
+    console.log("[useEffect setIsClient] setIsClient(true) called."); // Log added
   }, []);
 
-  // 티켓 구매 트랜잭션 시뮬레이션 및 단계 전환
+  // Ticket purchase transaction simulation and step transition
   useEffect(() => {
-    // 로딩이 끝났을 때만 검사
+    // Check only when loading is finished
     console.log(
       "[SimulateEffect] Status check - Loading:",
       isLoadingBuyTicketsSimulate,
@@ -1070,7 +1111,7 @@ export default function Home() {
         currentTransactionStep === "startingBuySimulation"
       ) {
         console.log(
-          "[SimulateEffect] 시뮬레이션 성공. 'startingBuySimulation'에서 'buying'으로 전환. Request:",
+          "[SimulateEffect] Simulation successful. Transitioning from 'startingBuySimulation' to 'buying'. Request:",
           buyTicketsConfig.request
         );
         setCurrentTransactionStep("buying");
@@ -1078,18 +1119,17 @@ export default function Home() {
         buyTicketsErrorSimulate &&
         currentTransactionStep === "startingBuySimulation"
       ) {
-        // 시뮬레이션 오류 처리
+        // Handle simulation error
         console.error(
-          "[SimulateEffect] 시뮬레이션 실패. 오류:",
+          "[SimulateEffect] Simulation failed. Error:",
           buyTicketsErrorSimulate
         );
         const errorMsg =
           (buyTicketsErrorSimulate as any)?.shortMessage ||
           buyTicketsErrorSimulate?.message ||
-          "알 수 없는 오류";
-        toast.error(`티켓 구매 시뮬레이션 실패: ${errorMsg}`);
+          "Unknown error";
+        toast.error(`Ticket purchase simulation failed: ${errorMsg}`);
         setCurrentTransactionStep("error");
-        setIsTransactionProcessing(false);
       }
     }
   }, [
@@ -1098,28 +1138,27 @@ export default function Home() {
     buyTicketsErrorSimulate,
     currentTransactionStep,
     setCurrentTransactionStep,
-    setIsTransactionProcessing,
   ]);
 
-  // 티켓 구매 트랜잭션 실행 (개선된 통합 버전)
+  // Execute ticket purchase transaction (improved integrated version)
   useEffect(() => {
-    // 상태 로깅
+    // Log state
     console.log(
-      "[BuyTransaction] 상태 확인 - 단계:",
+      "[BuyTransaction] State check - Step:",
       currentTransactionStep,
       "Args:",
       buyTicketsArgs,
-      "요청생성:",
+      "Request created:",
       !!buyTicketsConfig?.request,
-      "전송중:",
+      "Sending:",
       isBuyingTickets,
-      "전송완료:",
+      "Sent:",
       !!buyTicketsData,
-      "로딩중:",
+      "Loading:",
       isLoadingBuyTicketsSimulate
     );
 
-    // 조건: 티켓 구매 단계에서 트랜잭션 전송
+    // Condition: Send transaction in 'buying' step
     if (
       currentTransactionStep === "buying" &&
       buyTicketsConfig?.request &&
@@ -1128,31 +1167,32 @@ export default function Home() {
       !buyTicketsData
     ) {
       console.log(
-        "[BuyTransaction] 티켓 구매 트랜잭션 조건 충족, 트랜잭션 전송 시작"
+        "[BuyTransaction] Ticket purchase transaction conditions met, sending transaction"
       );
 
-      // 트랜잭션 실행
+      // Execute transaction
       (async () => {
         const toastId = "buy-tickets-tx";
         try {
-          toast.loading("티켓 구매 트랜잭션 전송 중...", { id: toastId });
+          toast.loading("Sending ticket purchase transaction...", {
+            id: toastId,
+          });
 
-          // 트랜잭션 전송
+          // Send transaction
           await buyTicketsAsync(buyTicketsConfig.request);
 
-          console.log("[BuyTransaction] 트랜잭션 전송 성공");
-          // 트랜잭션 확인은 isSuccessBuyTickets useEffect에서 처리
+          console.log("[BuyTransaction] Transaction sent successfully");
+          // Transaction confirmation is handled in isSuccessBuyTickets useEffect
         } catch (error) {
-          console.error("[BuyTransaction] 트랜잭션 전송 실패:", error);
+          console.error("[BuyTransaction] Transaction sending failed:", error);
           const errorMsg =
             (error as any)?.shortMessage ||
             (error as Error)?.message ||
-            "알 수 없는 오류";
-          toast.error(`티켓 구매 실패: ${errorMsg}`, { id: toastId });
+            "Unknown error";
+          toast.error(`Ticket purchase failed: ${errorMsg}`, { id: toastId });
 
-          // 오류 발생 시 상태 초기화
+          // Reset state on error
           setCurrentTransactionStep("error");
-          setIsTransactionProcessing(false);
         }
       })();
     }
@@ -1165,18 +1205,17 @@ export default function Home() {
     buyTicketsData,
     isLoadingBuyTicketsSimulate,
     setCurrentTransactionStep,
-    setIsTransactionProcessing,
   ]);
 
   return (
     <PageLayout>
       {/* Main Content Section */}
       <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-7 gap-4 mb-12">
-        {/* GIF Container - md:col-span-2, items-start justify-center 로 변경 */}
+        {/* GIF Container - changed to md:col-span-2, items-start justify-center */}
         <div className="md:col-span-2 flex flex-col items-start justify-center">
           <div className="relative w-96 h-96">
             {" "}
-            {/* GIF 이미지 크기 유지 */}
+            {/* Maintain GIF image size */}
             <Image
               src="/URUK_1.gif"
               alt="URUK Cat Logo"
@@ -1192,21 +1231,23 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Spacer for middle section - md:col-span-3에서 md:col-span-2로 변경 */}
+        {/* Spacer for middle section - changed from md:col-span-3 to md:col-span-2 */}
         <div className="hidden md:block md:col-span-2"></div>
 
-        {/* Right Column Data (Countdown + Leaderboard) - md:col-span-2에서 md:col-span-3로 변경 */}
+        {/* Right Column Data (Countdown + Leaderboard) - changed from md:col-span-2 to md:col-span-3 */}
         <div className="md:col-span-3 flex flex-col items-center gap-4">
-          {/* UPDATED: Countdown Box - 총 상금 표시 수정 */}
+          {/* UPDATED: Countdown Box - Total prize display modified */}
           <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 flex flex-col items-center justify-center shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow w-full flex-1">
-            <h3 className="text-lg font-medium text-purple-200 mb-1 font-joystix">
+            <h3 className="text-base font-medium text-purple-200 mb-1 font-joystix">
               countdown
             </h3>
-            <div className="text-4xl font-bold text-white flex items-center mb-3 font-joystix">
+            <div className="text-3xl font-bold text-white flex items-center mb-3 font-joystix">
               {isCountdownLoading ? (
-                <span className="animate-pulse">--:--</span>
+                <span className="animate-pulse">--:--:--</span>
               ) : (
                 <>
+                  <span>{String(countdown?.hours ?? 0).padStart(2, "0")}</span>
+                  <span className="mx-1 animate-pulse">:</span>
                   <span>
                     {String(countdown?.minutes ?? 0).padStart(2, "0")}
                   </span>
@@ -1217,12 +1258,14 @@ export default function Home() {
                 </>
               )}
             </div>
-            <div className="text-center font-joystix">
-              <span className="text-sm text-purple-200">Total Prize : </span>
+            <div className="text-center">
+              <span className="text-xs text-purple-200 font-joystix">
+                Total Prize :{" "}
+              </span>
               {isClient &&
               !isLoadingLotteryPoolBalance &&
               urukDecimals !== undefined ? (
-                <span className="text-sm font-medium text-pink-400">
+                <span className="text-xs font-medium text-pink-400 font-joystix">
                   {parseFloat(lotteryPoolBalanceFormatted).toLocaleString(
                     undefined,
                     {
@@ -1236,10 +1279,9 @@ export default function Home() {
                     }
                   )}{" "}
                   $URUK
-                  {/* 예: 1,234.56 $URUK 또는 1,000 $URUK (소수점 없을 시) */}
                 </span>
               ) : (
-                <span className="text-sm font-medium text-pink-400 animate-pulse">
+                <span className="text-xs font-medium text-pink-400 animate-pulse">
                   Loading...
                 </span>
               )}
@@ -1247,30 +1289,29 @@ export default function Home() {
           </div>
 
           {/* UPDATED: Leaderboard Box */}
-          <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow w-full flex-1 font-joystix">
-            <h3 className="text-lg font-medium text-purple-200 mb-3 text-center">
+          <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow w-full flex-1">
+            <h3 className="text-base font-medium text-purple-200 mb-3 text-center font-joystix">
               Leaderboard (Round #{activeRoundId?.toString() ?? "..."})
             </h3>
             <div className="space-y-2 min-h-[200px]">
-              {" "}
-              {/* 최소 높이 추가 */}
+              {/* Minimum height added */}
               {isLoadingLeaderboard ? (
                 <div className="flex justify-center items-center h-full">
-                  <p className="text-purple-300 animate-pulse">
+                  <p className="text-xs text-purple-300 animate-pulse">
                     Loading leaderboard...
                   </p>
                 </div>
               ) : leaderboardError ? (
                 <div className="flex justify-center items-center h-full">
-                  <p className="text-red-400">{leaderboardError}</p>
+                  <p className="text-xs text-red-400">{leaderboardError}</p>
                 </div>
               ) : leaderboardData.length > 0 ? (
                 leaderboardData.map((entry, index) => (
                   <div
                     key={entry.address || index}
-                    className="flex justify-between items-center text-sm"
+                    className="flex justify-between items-center text-xs"
                   >
-                    <span className="w-6 text-right mr-2">
+                    <span className="w-5 text-right mr-2">
                       {entry.rank || index + 1}.
                     </span>
                     <span
@@ -1286,21 +1327,11 @@ export default function Home() {
                 ))
               ) : (
                 <div className="flex justify-center items-center h-full">
-                  <p className="text-gray-400">
+                  <p className="text-xs text-gray-400">
                     No leaderboard data available for this round.
                   </p>
                 </div>
               )}
-              {/* 만약 10개 미만일 경우 빈칸 채우기 (선택적) */}
-              {/* {!isLoadingLeaderboard && leaderboardData.length < 10 && 
-                  Array.from({ length: 10 - leaderboardData.length }).map((_, i) => (
-                      <div key={`empty-${i}`} className="flex justify-between items-center text-sm opacity-50">
-                          <span className="w-6 text-right mr-2">{leaderboardData.length + i + 1}.</span>
-                          <span className="flex-1 truncate text-gray-500">-</span>
-                          <span className="ml-2 font-medium text-gray-500">[-]</span>
-                      </div>
-                  ))
-              } */}
             </div>
           </div>
         </div>
@@ -1309,12 +1340,12 @@ export default function Home() {
       {/* Form Section */}
       <div className="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-7 gap-4 mb-8">
         <a
-          href="https://www.kuru.io/trade/0x5d6506e92b0a1205bd717b66642e961edad0a884" // 이 주소는 $URUK 토큰의 거래소 주소인가요? 필요시 업데이트
+          href="https://www.kuru.io/trade/0x5d6506e92b0a1205bd717b66642e961edad0a884"
           target="_blank"
           rel="noopener noreferrer"
           className="md:col-span-2"
         >
-          <button className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-medium py-3 px-6 rounded-md transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-pink-600/30">
+          <button className="w-full bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-medium py-3 px-6 rounded-md transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-pink-600/30 text-sm font-joystix">
             Trade $URUK
           </button>
         </a>
@@ -1346,7 +1377,7 @@ export default function Home() {
 
         <button
           onClick={handleSubmitTickets}
-          className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium py-3 px-6 rounded-md transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="md:col-span-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium py-3 px-6 rounded-md transition-all duration-300 transform hover:scale-105 hover:shadow-lg hover:shadow-blue-600/30 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-joystix"
           disabled={isSubmitButtonDisabled}
         >
           {submitButtonText}
@@ -1354,39 +1385,54 @@ export default function Home() {
       </div>
 
       {/* Owned Tickets Display Section */}
-      <div className="max-w-4xl mx-auto w-full mb-8 text-center">
-        <p className="text-xl font-medium text-purple-200">
-          My Ticket:{" "}
-          {!isClient ||
-          isLoadingOwnedTickets ||
-          isLoadingActiveRound ||
-          activeRoundId === undefined ? (
-            <span className="text-2xl font-bold text-white">Loading...</span>
-          ) : (
-            <span className="text-2xl font-bold text-white">
-              {ownedTickets?.toString() ?? "0"}
-            </span>
-          )}{" "}
-          🎟️
-        </p>
-        {isClient && (
-          <p className="text-xs text-purple-300 mt-1">
-            (Current Allowance:{" "}
-            {isLoadingUrukAllowance ||
-            urukAllowance === undefined ||
-            urukDecimals === undefined ? (
-              <span className="animate-pulse">Loading...</span>
-            ) : (
-              `${formatUnits(urukAllowance, urukDecimals)} URUK`
-            )}
-            )
-          </p>
-        )}
+      <div className="max-w-4xl mx-auto w-full mb-8">
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          {/* URUK balance display (moved from header.tsx) */}
+          <div className="bg-black/30 px-4 py-2 rounded-md border border-purple-500/30">
+            <p className="text-base font-medium text-purple-200">
+              My Balance:{" "}
+              {!isClient ||
+              isLoadingUrukBalance ||
+              urukDecimals === undefined ? (
+                <span className="text-lg font-bold text-white animate-pulse">
+                  Loading...
+                </span>
+              ) : (
+                <span className="text-lg font-bold text-white font-joystix">
+                  {parseFloat(urukBalanceFormatted).toLocaleString()} $URUK
+                </span>
+              )}
+            </p>
+          </div>
+
+          {/* Ticket ownership display (existing part) */}
+          <div className="bg-black/30 px-4 py-2 rounded-md border border-purple-500/30">
+            <p className="text-base font-medium text-purple-200">
+              My Ticket:{" "}
+              {!isClient ||
+              isLoadingOwnedTickets ||
+              isLoadingActiveRound ||
+              activeRoundId === undefined ? (
+                <span className="text-lg font-bold text-white animate-pulse">
+                  Loading...
+                </span>
+              ) : (
+                <span className="text-lg font-bold text-white font-joystix">
+                  {ownedTickets?.toString() ?? "0"}
+                </span>
+              )}{" "}
+              🎟️
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Description Section */}
       <div className="max-w-4xl mx-auto w-full mb-12">
-        <h2 className="text-2xl font-bold mb-4 text-center">
+        <h3 className="text-sm text-yellow-500 font-bold mb-4 text-center font-joystix">
+          !!! You must withdraw $URUK to your EVM wallet to buy tickets. !!!
+        </h3>
+        <h2 className="text-lg font-bold mb-4 text-center font-joystix">
           URUK URUK Wanna get a gift from the cutest cat ever? Grab a ticket
           with $URUK and take your shot at winning!
         </h2>
@@ -1395,11 +1441,11 @@ export default function Home() {
             "1 $URUK = 1 ticket.",
             "All  spent on tickets goes into the prize pool.",
             "One lucky winner gets the entire pool of $URUK.",
-            " A winner is picked every 6 hours, and the prize gets airdropped straight to their wallet!",
+            "A winner is picked every 6 hours, and the prize gets airdropped straight to their wallet!",
           ].map((text, index) => (
             <li key={index} className="flex items-start">
-              <span className="inline-block w-5 h-5 mr-2 rounded-full border border-pink-500 flex-shrink-0"></span>
-              <span className="text-purple-200">{text}</span>
+              <span className="inline-block w-4 h-4 mr-2 rounded-full border border-pink-500 flex-shrink-0"></span>
+              <span className="text-sm text-purple-200">{text}</span>
             </li>
           ))}
         </ul>

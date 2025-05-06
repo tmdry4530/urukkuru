@@ -53,7 +53,7 @@ export function Header() {
       query: {
         enabled:
           !!urukTokenAddress && isConnected && isCorrectNetwork && isClient,
-        staleTime: 1000 * 60 * 60 * 24, // 24시간
+        staleTime: 1000 * 60 * 60 * 24, // 24 hours
       },
     });
   const urukDecimals =
@@ -74,10 +74,10 @@ export function Header() {
         enabled:
           !!urukTokenAddress &&
           !!accountAddress &&
-          urukDecimals !== undefined && // decimals 로드 후
+          urukDecimals !== undefined && // after decimals load
           isCorrectNetwork &&
           isClient,
-        staleTime: 1000 * 30, // 30초
+        staleTime: 1000 * 30, // 30 seconds
       },
     });
   const urukBalance = urukBalanceData as bigint | undefined;
@@ -87,54 +87,71 @@ export function Header() {
       ? parseFloat(formatUnits(urukBalance, urukDecimals)).toFixed(2)
       : "0";
 
-  // Animate glow effect
+  // Animate glow effect using requestAnimationFrame for stability
   useEffect(() => {
-    const interval = setInterval(() => {
-      setGlowIntensity((prev) => {
-        const newValue = prev + 0.05 * (Math.random() > 0.5 ? 1 : -1);
-        return Math.max(0.8, Math.min(1.2, newValue));
-      });
-    }, 100);
-    return () => clearInterval(interval);
-  }, []);
+    let animationFrameId: number;
+    let lastUpdateTime = 0;
+    const updateInterval = 100; // 100ms, same as original setInterval
+
+    const animateGlow = (timestamp: number) => {
+      if (timestamp - lastUpdateTime >= updateInterval) {
+        setGlowIntensity((prev) => {
+          const newValue = prev + 0.05 * (Math.random() > 0.5 ? 1 : -1);
+          return Math.max(0.8, Math.min(1.2, newValue));
+        });
+        lastUpdateTime = timestamp;
+      }
+      animationFrameId = requestAnimationFrame(animateGlow);
+    };
+
+    animationFrameId = requestAnimationFrame(animateGlow);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, []); // Empty dependency array means this runs once on mount and cleans up on unmount
 
   const showUserBalance = isClient && isConnected && isCorrectNetwork;
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-md bg-[#1a0028]/80 border-b border-purple-500/30 px-4 py-3">
+    <header className="sticky top-0 z-50 backdrop-blur-md bg-[#1a0028]/80 border-b border-purple-500/30 px-4 py-2">
       <nav className="max-w-7xl mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center group">
-          <div className="relative w-10 h-10 mr-2 transform group-hover:scale-110 transition-transform">
+          <div className="relative w-8 h-8 mr-2 transform group-hover:scale-110 transition-transform">
             <Image
               src="/logo.png"
               alt="URUK Logo"
-              width={40}
-              height={40}
+              width={32}
+              height={32}
               className="object-contain"
               style={{
                 filter: `drop-shadow(0 0 ${
-                  5 * glowIntensity
+                  4 * glowIntensity
                 }px rgba(255, 0, 255, 0.8))`,
               }}
             />
           </div>
-          <span className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 animate-gradient">
+          <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 animate-gradient font-joystix">
             URUK
           </span>
         </Link>
 
-        <div className="flex items-center space-x-6">
-          <div className="hidden md:flex items-center space-x-6">
+        <div className="flex items-center space-x-4">
+          <div className="hidden md:flex items-center space-x-4">
+            <Link
+              href="/"
+              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
+            >
+              Home
+              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
+            </Link>
             <Link
               href="/tokenomics"
-              className="relative px-3 py-2 text-base font-medium transition-colors hover:text-pink-400 group"
+              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
             >
               Tokenomics
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
             </Link>
             <Link
               href="/story"
-              className="relative px-3 py-2 text-base font-medium transition-colors hover:text-pink-400 group"
+              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
             >
               Story
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
@@ -143,24 +160,15 @@ export function Header() {
               href="https://www.kuru.io/trade/0x5d6506e92b0a1205bd717b66642e961edad0a884"
               target="_blank"
               rel="noopener noreferrer"
-              className="relative px-3 py-2 text-base font-medium transition-colors hover:text-pink-400 group"
+              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
             >
               Trade $URUK
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
             </a>
           </div>
 
-          <div className="flex items-center space-x-2">
-            {showUserBalance && (
-              <div className="hidden md:block px-3 py-1.5 text-sm bg-black/20 border border-purple-500/30 rounded-md text-purple-200">
-                {isLoadingUrukBalance || isLoadingUrukDecimals ? (
-                  <span>Loading...</span>
-                ) : (
-                  <span>{urukBalanceFormatted} $URUK</span>
-                )}
-              </div>
-            )}
-            <div className="transform scale-90 md:scale-100">
+          <div className="flex items-center space-x-1">
+            <div className="transform scale-75 md:scale-90">
               <ConnectButton
                 accountStatus={{
                   smallScreen: "avatar",

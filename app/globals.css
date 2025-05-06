@@ -2,46 +2,73 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Joystix 폰트 정의 */
+/* Joystix 폰트 설정 */
 @font-face {
-  font-family: "Joystix Monospace";
-  /* 사용자가 public/fonts/joystix-monospace.otf 에 파일을 위치시켰다고 가정 */
+  font-family: "Joystix";
   src: url("/fonts/joystix-monospace.otf") format("opentype");
-  /* WOFF2 형식이 있다면 아래와 같이 추가하는 것이 좋습니다.
-  src: url('/fonts/joystix-monospace.woff2') format('woff2'),
-       url('/fonts/joystix-monospace.otf') format('opentype'); 
-  */
   font-weight: normal;
   font-style: normal;
   font-display: swap;
 }
 
-@layer base {
-  body {
-    @apply bg-slate-900 text-slate-50;
-    font-family: "Joystix Monospace", "Courier New", "Courier", monospace; /* Courier를 따옴표로 감쌈 */
-  }
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 0, 0, 0;
+}
 
-  /* 다른 기본 스타일이 필요하다면 여기에 추가 */
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  font-size: 14px; /* 기본 폰트 크기 조정 */
+}
+
+/* 폰트를 적용할 클래스 - 모든 요소에 적용하지 않고 선택적으로 적용 */
+.font-joystix {
+  font-family: "Joystix", monospace;
+  letter-spacing: -0.03em; /* 글자 간격 약간 줄임 */
+  line-height: 1.4; /* 줄 간격 조정 */
+}
+
+@layer base {
+  /* 텍스트 관련 기본 스타일 */
   h1,
   h2,
   h3,
   h4,
   h5,
   h6 {
-    font-family: "Joystix Monospace", "Courier New", "Courier", monospace; /* Courier를 따옴표로 감쌈 */
+    @apply font-medium mb-2;
   }
 
-  input,
+  /* 글자 크기 스케일 조정 */
+  h1 {
+    @apply text-xl;
+  }
+  h2 {
+    @apply text-lg;
+  }
+  h3 {
+    @apply text-base;
+  }
+
+  /* 버튼 및 입력 요소 */
   button,
+  input,
   select,
   textarea {
-    font-family: "Joystix Monospace", "Courier New", "Courier", monospace; /* Courier를 따옴표로 감쌈 */
+    font-family: inherit;
   }
 }
 
-/* 기존의 다른 전역 스타일이 있다면 여기에 유지 */
-
+/* 애니메이션 효과 */
 .animate-gradient {
   background-size: 300%;
   -webkit-animation: animatedgradient 6s ease infinite alternate;
@@ -59,4 +86,14 @@
   100% {
     background-position: 0% 50%;
   }
+}
+
+/* FOUT(Flash of Unstyled Text) 방지를 위한 스타일 */
+.font-loaded .font-joystix {
+  opacity: 1;
+  transition: opacity 0.1s ease-in;
+}
+
+.font-loading .font-joystix {
+  opacity: 0.9;
 }

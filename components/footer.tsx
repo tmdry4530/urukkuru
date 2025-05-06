@@ -4,15 +4,15 @@ export function Footer() {
   return (
     <>
       {/* Announcement Bar - overflow-hidden 추가 */}
-      <div className="w-full bg-gradient-to-r from-pink-900/30 to-purple-900/30 backdrop-blur-sm py-3 px-4 text-center text-sm overflow-hidden">
-        {/* 애니메이션 적용될 요소를 div로 변경하고, 내부에 실제 텍스트 span 추가 */}
-        <div className="animate-marquee">
+      {/* <div className="w-full bg-gradient-to-r from-pink-900/30 to-purple-900/30 backdrop-blur-sm py-3 px-4 text-center text-sm overflow-hidden"> */}
+      {/* 애니메이션 적용될 요소를 div로 변경하고, 내부에 실제 텍스트 span 추가 */}
+      {/* <div className="animate-marquee">
           <span>Winner of the first draw: Ox n $URUK</span>
-        </div>
-      </div>
+        </div> */}
+      {/* </div> */}
 
       {/* Footer */}
-      <footer className="w-full bg-black/60 backdrop-blur-md border-t border-purple-500/30 py-4 px-4">
+      <footer className="w-full border-t border-purple-500/30 py-4 px-4 font-joystix">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between">
           {/* Twitter Icon Link (Left Aligned) */}
           <a
