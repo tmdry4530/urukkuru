@@ -45,31 +45,31 @@ export function Header() {
         <div className="hidden md:flex items-center space-x-6">
           <Link
             href="/tokenomics"
-            className="relative px-3 py-2 text-sm font-medium transition-colors hover:text-pink-400 group"
+            className="relative px-3 py-2 text-base font-medium transition-colors hover:text-pink-400 group"
           >
             Tokenomics
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
           </Link>
           <Link
             href="/story"
-            className="relative px-3 py-2 text-sm font-medium transition-colors hover:text-pink-400 group"
+            className="relative px-3 py-2 text-base font-medium transition-colors hover:text-pink-400 group"
           >
             Story
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
           </Link>
-          <Link
-            href="#"
-            className="relative px-3 py-2 text-sm font-medium transition-colors hover:text-pink-400 group"
+          <a
+            href="https://www.kuru.io/trade/0x5d6506e92b0a1205bd717b66642e961edad0a884"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="relative px-3 py-2 text-base font-medium transition-colors hover:text-pink-400 group"
           >
-            Buy Token
+            Trade $URUK
             <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
-          </Link>
-          <Link
-            href="#"
-            className="ml-4 px-3 py-2 text-sm font-medium bg-gradient-to-r from-pink-600 to-purple-600 rounded-md hover:from-pink-500 hover:to-purple-500 transition-colors"
-          >
+          </a>
+
+          <div className="transform scale-75">
             <ConnectButton />
-          </Link>
+          </div>
         </div>
 
         <button className="md:hidden text-white">

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { Pixelify_Sans } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet-provider";
+import "@rainbow-me/rainbowkit/styles.css";
 
 const pixelifySans = Pixelify_Sans({
   subsets: ["latin"],
@@ -20,7 +21,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const showComingSoonModal = true; // 이 값을 false로 바꾸면 모달이 사라집니다.
+  const showComingSoonModal = false; // 이 값을 false로 바꾸면 모달이 사라집니다.
 
   if (showComingSoonModal) {
     return (
