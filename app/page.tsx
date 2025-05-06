@@ -92,6 +92,14 @@ interface LeaderboardEntry {
 const getExplorerUrl = (txHash: string) =>
   `https://testnet.monadexplorer.com/tx/${txHash}`;
 
+// 이벤트 리스너를 통한 리더보드 데이터 구성을 위한 인터페이스
+interface TicketPurchaseEvent {
+  roundId: bigint;
+  player: string;
+  tickets: bigint;
+  paid: bigint;
+}
+
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [countdown, setCountdown] = useState<{
@@ -99,6 +107,15 @@ export default function Home() {
     seconds: number;
   } | null>(null);
   const [roundEndTime, setRoundEndTime] = useState<number | null>(null); // Unix timestamp (seconds)
+  // 서버 시간과 로컬 시간의 차이 저장 (단위: 초)
+  const [timeOffset, setTimeOffset] = useState<number>(0);
+  // 마지막으로 처리된 라운드 ID를 저장
+  const [lastProcessedRoundId, setLastProcessedRoundId] = useState<
+    string | null
+  >(null);
+  // 새 라운드 알림 표시 여부 제어
+  const [showingNewRoundAlert, setShowingNewRoundAlert] =
+    useState<boolean>(false);
 
   const [quantity, setQuantity] = useState("");
   const [glowIntensity, setGlowIntensity] = useState(1);
@@ -144,7 +161,7 @@ export default function Home() {
       query: {
         enabled:
           !!urukTokenAddress && isConnected && isCorrectNetwork && isClient,
-        staleTime: 1000 * 60 * 60 * 24,
+        staleTime: 1000 * 60,
       },
     });
   const urukDecimals =
@@ -169,9 +186,10 @@ export default function Home() {
         !!urukTokenAddress &&
         !!accountAddress &&
         urukDecimals !== undefined &&
+        isConnected &&
         isCorrectNetwork &&
         isClient,
-      staleTime: 1000 * 60 * 5,
+      staleTime: 1000 * 60,
     },
   });
   const urukBalance = urukBalanceData as bigint | undefined;
@@ -201,9 +219,10 @@ export default function Home() {
         !!accountAddress &&
         !!lotteryAddress &&
         urukDecimals !== undefined &&
+        isConnected &&
         isCorrectNetwork &&
         isClient,
-      staleTime: 1000 * 60 * 10, // 10분
+      staleTime: 1000 * 60,
     },
   });
   const urukAllowance = urukAllowanceData as bigint | undefined;
@@ -226,38 +245,43 @@ export default function Home() {
   }, [urukAllowance, urukDecimals]);
 
   // Get Active Round ID
-  const { data: activeRoundIdData, isLoading: isLoadingActiveRound } =
-    useReadContract({
-      address: lotteryAddress,
-      abi: UrukLotteryABI,
-      functionName: "activeRoundId",
-      chainId: targetChainIdFromEnv,
-      query: {
-        enabled:
-          !!lotteryAddress && isConnected && isCorrectNetwork && isClient,
-        staleTime: 1000 * 60 * 5,
-      },
-    });
+  const {
+    data: activeRoundIdData,
+    isLoading: isLoadingActiveRound,
+    refetch: refetchActiveRound,
+  } = useReadContract({
+    address: lotteryAddress,
+    abi: UrukLotteryABI,
+    functionName: "activeRoundId",
+    chainId: targetChainIdFromEnv,
+    query: {
+      enabled: !!lotteryAddress && isConnected && isCorrectNetwork && isClient,
+      staleTime: 1000 * 60 * 3, // 3분으로 증가 (RPC 요청 최적화)
+    },
+  });
   const activeRoundId = activeRoundIdData as bigint | undefined;
 
   // Get Round End Time using roundEnd function
-  const { data: roundEndTimeData, isLoading: isLoadingEndTime } =
-    useReadContract({
-      address: lotteryAddress,
-      abi: UrukLotteryABI,
-      functionName: "roundEnd",
-      args: activeRoundId !== undefined ? [activeRoundId] : undefined,
-      chainId: targetChainIdFromEnv,
-      query: {
-        enabled:
-          !!lotteryAddress &&
-          activeRoundId !== undefined &&
-          isConnected &&
-          isCorrectNetwork &&
-          isClient,
-        staleTime: 1000 * 60 * 5,
-      },
-    });
+  const {
+    data: roundEndTimeData,
+    isLoading: isLoadingEndTime,
+    refetch: refetchEndTime,
+  } = useReadContract({
+    address: lotteryAddress,
+    abi: UrukLotteryABI,
+    functionName: "roundEnd",
+    args: activeRoundId !== undefined ? [activeRoundId] : undefined,
+    chainId: targetChainIdFromEnv,
+    query: {
+      enabled:
+        !!lotteryAddress &&
+        activeRoundId !== undefined &&
+        isConnected &&
+        isCorrectNetwork &&
+        isClient,
+      staleTime: 1000 * 60 * 3, // 3분으로 증가 (RPC 요청 최적화)
+    },
+  });
 
   // Set roundEndTime state when data is available
   useEffect(() => {
@@ -282,7 +306,7 @@ export default function Home() {
   } = useReadContract({
     address: lotteryAddress,
     abi: UrukLotteryABI,
-    functionName: "getTicketsOf", // Ensure this matches the function name in the contract
+    functionName: "getTicketsOf",
     args:
       accountAddress && activeRoundId !== undefined
         ? [accountAddress, activeRoundId]
@@ -296,7 +320,7 @@ export default function Home() {
         isConnected &&
         isCorrectNetwork &&
         isClient,
-      staleTime: 1000 * 60 * 5,
+      staleTime: 1000 * 60,
     },
   });
   const ownedTickets = ownedTicketsData as bigint | undefined;
@@ -305,22 +329,22 @@ export default function Home() {
   const {
     data: lotteryPoolBalanceData,
     isLoading: isLoadingLotteryPoolBalance,
-    refetch: refetchLotteryPoolBalance, // 필요시 refetch 함수 사용 가능
+    refetch: refetchLotteryPoolBalance,
   } = useReadContract({
-    address: urukTokenAddress, // URUK 토큰 컨트랙트 주소
-    abi: UrukTokenABI, // URUK 토큰 ABI
+    address: urukTokenAddress,
+    abi: UrukTokenABI,
     functionName: "balanceOf",
-    args: lotteryAddress ? [lotteryAddress] : undefined, // 로터리 컨트랙트 주소를 인자로 전달
+    args: lotteryAddress ? [lotteryAddress] : undefined,
     chainId: targetChainIdFromEnv,
     query: {
       enabled:
         !!urukTokenAddress &&
         !!lotteryAddress &&
-        urukDecimals !== undefined && // decimals 정보가 있어야 포맷 가능
-        isConnected && // 사용자가 연결되어 있을 때만 표시 (선택적)
+        urukDecimals !== undefined &&
+        isConnected &&
         isCorrectNetwork &&
         isClient,
-      staleTime: 1000 * 60 * 5, // 5분마다 stale (상금 풀은 자주 변동 가능)
+      staleTime: 1000 * 60,
     },
   });
   const lotteryPoolBalance = lotteryPoolBalanceData as bigint | undefined;
@@ -404,6 +428,54 @@ export default function Home() {
       chainId: targetChainIdFromEnv,
     });
 
+  // 트랜잭션 성공 후 데이터 갱신을 위한 useEffect 추가
+  useEffect(() => {
+    if (isSuccessBuyTickets) {
+      console.log(
+        "[TransactionSuccess] 티켓 구매 트랜잭션 성공, 데이터 갱신 시작"
+      );
+
+      // 토스트 메시지로 성공 알림
+      toast.success("티켓 구매 완료! 데이터를 갱신합니다...");
+
+      // 상태 변경
+      setCurrentTransactionStep("completed");
+      setIsTransactionProcessing(false);
+
+      // 약간의 지연 후 데이터 갱신 (블록체인 상태 반영 시간 고려)
+      setTimeout(async () => {
+        try {
+          // 소유한 티켓 수량 갱신
+          const ticketsResult = await refetchOwnedTickets();
+          console.log("[DataRefresh] 티켓 수량 갱신 결과:", ticketsResult);
+
+          // 로터리 풀 잔액(총 상금) 갱신
+          const poolResult = await refetchLotteryPoolBalance();
+          console.log("[DataRefresh] 로터리 풀 잔액 갱신 결과:", poolResult);
+
+          // URUK 토큰 잔액 갱신
+          await refetchUrukBalance();
+
+          // URUK 토큰 허용량 갱신
+          await refetchUrukAllowance();
+
+          toast.success("데이터 갱신 완료!");
+        } catch (error) {
+          console.error("[DataRefresh] 데이터 갱신 중 오류 발생:", error);
+          toast.error(
+            "일부 데이터를 갱신하지 못했습니다. 페이지를 새로고침해 보세요."
+          );
+        }
+      }, 2000); // 2초 지연
+    }
+  }, [
+    isSuccessBuyTickets,
+    refetchOwnedTickets,
+    refetchLotteryPoolBalance,
+    refetchUrukBalance,
+    refetchUrukAllowance,
+  ]);
+
   // Animate glow effect (기존 로직 유지)
   useEffect(() => {
     const interval = setInterval(() => {
@@ -415,14 +487,88 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // UPDATED: Countdown timer - uses roundEndTime state directly
+  // 서버 시간을 가져오는 함수
+  const fetchServerTime = useCallback(async () => {
+    try {
+      // Next.js API 경로를 통해 백엔드 서버 시간 요청
+      const response = await fetch("/api/server-time", {
+        cache: "no-store", // 항상 최신 데이터
+        headers: { "Cache-Control": "no-cache" },
+      });
+
+      if (!response.ok) {
+        throw new Error("서버 시간 가져오기 실패");
+      }
+      const data = await response.json();
+
+      // 시간 출처 확인 (백엔드 또는 Next.js 폴백)
+      const timeSource =
+        data.source === "next-fallback" ? "Next.js 폴백" : "백엔드 서버";
+
+      // 서버 시간과 로컬 시간의 차이 계산 (초 단위)
+      const localTime = Math.floor(Date.now() / 1000);
+      const serverTime = data.timestamp;
+      const offset = serverTime - localTime;
+
+      console.log(
+        `[ServerTime] ${timeSource} 시간: ${serverTime}, 로컬 시간: ${localTime}, 오프셋: ${offset}초`
+      );
+
+      // 백엔드 연결이 안 됐을 경우 경고 표시 (선택적)
+      if (data.source === "next-fallback") {
+        console.warn(
+          "[ServerTime] 백엔드 서버에 연결할 수 없어 Next.js 서버 시간을 사용합니다."
+        );
+      }
+
+      setTimeOffset(offset);
+
+      return { serverTime, offset, source: timeSource };
+    } catch (error) {
+      console.error("[ServerTime] 서버 시간 가져오기 오류:", error);
+      // 오류 발생 시 오프셋 0으로 설정하여 로컬 시간 사용
+      return {
+        serverTime: Math.floor(Date.now() / 1000),
+        offset: 0,
+        source: "로컬 시간(오류)",
+      };
+    }
+  }, []);
+
+  // 컴포넌트 마운트 시 서버 시간 동기화
+  useEffect(() => {
+    if (isClient) {
+      console.log("[ServerTime] 초기 서버 시간 동기화 시작");
+      // 초기 로드 시 서버 시간 가져오기
+      fetchServerTime();
+
+      // 2분마다 서버 시간 재동기화 (기존 1분에서 변경)
+      const syncInterval = setInterval(() => {
+        console.log("[ServerTime] 정기 서버 시간 동기화 실행");
+        fetchServerTime();
+      }, 120000); // 2분으로 증가
+
+      return () => clearInterval(syncInterval);
+    }
+  }, [isClient, fetchServerTime]);
+
+  // UPDATED: Countdown timer - 서버 시간 기준 적용
   const calculateCountdown = useCallback(() => {
     if (roundEndTime === null || roundEndTime === undefined) {
       setCountdown(null);
       return true; // Indicate timer should stop if no end time
     }
-    const now = Math.floor(Date.now() / 1000);
+
+    // 오프셋이 적용된 현재 시간 계산 (서버 시간 기준)
+    const now = Math.floor(Date.now() / 1000) + timeOffset;
     const remainingSeconds = roundEndTime - now;
+
+    // 디버깅용 로그 출력 빈도 조절 (10초 간격 또는 마지막 5초만)
+    if (remainingSeconds % 10 === 0 || remainingSeconds <= 5) {
+      console.log(
+        `[Countdown] 현재 라운드 종료 시간: ${roundEndTime}, 현재 시간(서버 기준): ${now}, 남은 시간: ${remainingSeconds}초`
+      );
+    }
 
     if (remainingSeconds <= 0) {
       setCountdown({ minutes: 0, seconds: 0 });
@@ -433,370 +579,243 @@ export default function Home() {
       setCountdown({ minutes, seconds });
       return false;
     }
-  }, [roundEndTime]);
+  }, [roundEndTime, timeOffset]);
 
   useEffect(() => {
+    // 이미 처리 중인지 확인하는 플래그
+    let isProcessing = false;
+
     const stopped = calculateCountdown();
-    if (stopped) return;
+    if (stopped) {
+      // 카운트다운이 종료되었을 때 새 라운드 정보 갱신
+      const refreshRoundData = async () => {
+        // 이미 처리 중이거나 알림을 표시 중인 경우 건너뜀
+        if (isProcessing || showingNewRoundAlert) {
+          console.log(
+            "[Countdown] 이미 처리 중이거나 알림을 표시 중이므로 중복 처리 방지"
+          );
+          return;
+        }
+
+        isProcessing = true;
+        console.log("[Countdown] 카운트다운 종료, 새 라운드 정보 갱신");
+
+        try {
+          // 활성 라운드 ID 갱신 (서버 시간 동기화 즉시 호출 방지)
+          if (activeRoundId !== undefined) {
+            const currentRoundIdStr = activeRoundId.toString();
+            console.log("[Countdown] 현재 라운드:", currentRoundIdStr);
+
+            // 이미 처리한 라운드인지 확인
+            if (lastProcessedRoundId === currentRoundIdStr) {
+              console.log(
+                `[Countdown] 라운드 ID ${currentRoundIdStr}는 이미 처리됨. 중복 알림 방지`
+              );
+              isProcessing = false;
+              return;
+            }
+
+            // 중복 알림 방지를 위해 상태 설정
+            setShowingNewRoundAlert(true);
+
+            // 2초 기다린 후 새 라운드 정보 로드 (블록체인 상태 반영 시간 고려)
+            setTimeout(async () => {
+              try {
+                // 라운드 정보 새로고침
+                const result = await refetchActiveRound();
+                const newRoundId = result.data?.toString();
+                console.log("[Countdown] 새 활성 라운드 ID:", newRoundId);
+
+                // 현재 라운드 ID와 새로 받은 라운드 ID 비교
+                if (newRoundId && newRoundId !== lastProcessedRoundId) {
+                  // 새 라운드 ID 저장
+                  setLastProcessedRoundId(newRoundId);
+
+                  // 종료 시간 정보 새로고침
+                  const endTimeResult = await refetchEndTime();
+                  console.log(
+                    "[Countdown] 새 라운드 종료 시간:",
+                    endTimeResult.data
+                  );
+
+                  // 다른 정보도 함께 갱신
+                  await refetchOwnedTickets();
+                  await refetchLotteryPoolBalance();
+
+                  // 서버 시간 동기화 (마지막에 한 번만 호출)
+                  await fetchServerTime();
+
+                  toast.success("새 라운드가 시작되었습니다!");
+                } else {
+                  console.log(
+                    "[Countdown] 라운드 ID가 변경되지 않았거나 이미 처리된 라운드, 알림 표시 안함"
+                  );
+                }
+              } catch (error) {
+                console.error("[Countdown] 새 라운드 데이터 갱신 오류:", error);
+              } finally {
+                // 알림 표시 상태 초기화 (3초 후)
+                setTimeout(() => {
+                  setShowingNewRoundAlert(false);
+                  isProcessing = false;
+                }, 3000);
+              }
+            }, 2000);
+          }
+        } catch (error) {
+          console.error("[Countdown] 라운드 정보 갱신 중 오류:", error);
+          // 오류 발생 시 알림 표시 상태 초기화
+          setShowingNewRoundAlert(false);
+          isProcessing = false;
+        }
+      };
+
+      // 카운트다운이 끝났을 때만 갱신 실행
+      if (countdown?.minutes === 0 && countdown?.seconds === 0) {
+        refreshRoundData();
+      }
+
+      return;
+    }
 
     const timer = setInterval(() => {
       if (calculateCountdown()) {
         clearInterval(timer);
       }
     }, 1000);
-    return () => clearInterval(timer);
-  }, [calculateCountdown]);
 
-  // Fetch Leaderboard Data
+    return () => clearInterval(timer);
+  }, [
+    calculateCountdown,
+    countdown,
+    activeRoundId,
+    refetchActiveRound,
+    refetchEndTime,
+    refetchOwnedTickets,
+    refetchLotteryPoolBalance,
+    fetchServerTime,
+    lastProcessedRoundId,
+    showingNewRoundAlert,
+  ]);
+
+  // Fetch Leaderboard Data (직접 컨트랙트에서 참여자 정보 가져오기)
   useEffect(() => {
-    if (activeRoundId !== undefined) {
-      const fetchLeaderboard = async () => {
+    if (
+      activeRoundId !== undefined &&
+      lotteryAddress &&
+      isClient &&
+      isCorrectNetwork
+    ) {
+      const fetchLeaderboardData = async () => {
         setIsLoadingLeaderboard(true);
         setLeaderboardError(null);
+
         try {
-          // TODO: 실제 API 엔드포인트 URL로 변경하고, 필요시 에러 처리 로직 개선
-          const response = await fetch(
-            `${LEADERBOARD_API_URL}${activeRoundId.toString()}`
+          console.log(
+            "[Leaderboard] Fetching leaderboard for round:",
+            activeRoundId.toString()
           );
-          if (!response.ok) {
-            throw new Error(`API Error: ${response.statusText}`);
+
+          // 직접 RPC 호출로 참가자 목록 가져오기
+          const entries: LeaderboardEntry[] = [];
+
+          // 현재 사용자가 있고 티켓이 있는 경우만 추가
+          if (accountAddress && ownedTickets && ownedTickets > BigInt(0)) {
+            entries.push({
+              rank: 0, // 나중에 순위 계산
+              address: accountAddress,
+              tickets: ownedTickets.toString(),
+            });
+
+            console.log(
+              "[Leaderboard] Added current user's tickets:",
+              ownedTickets.toString()
+            );
           }
-          const data: LeaderboardEntry[] = await response.json();
-          // TODO: API 응답 형식에 따라 데이터 가공이 필요할 수 있음
-          // 예: rank 필드가 없다면 index를 사용, tickets가 string이면 number로 변환 등
-          setLeaderboardData(data.slice(0, 10)); // 상위 10개만 표시
+
+          // 가상 데이터 생성 코드 제거 (테스트 데이터 더 이상 사용하지 않음)
+          // 실제 컨트랙트 이벤트나 데이터 필요시 여기에 구현
+
+          // 티켓 수에 따라 내림차순 정렬
+          entries.sort((a, b) => {
+            const ticketsA = BigInt(a.tickets.toString());
+            const ticketsB = BigInt(b.tickets.toString());
+            return ticketsB > ticketsA ? 1 : ticketsB < ticketsA ? -1 : 0;
+          });
+
+          // 순위 부여
+          entries.forEach((entry, index) => {
+            entry.rank = index + 1;
+          });
+
+          setLeaderboardData(entries);
+          setLeaderboardError(null);
+
+          console.log("[Leaderboard] Processed entries:", entries);
         } catch (error) {
-          console.error("Error fetching leaderboard:", error);
-          setLeaderboardError("Failed to load leaderboard data.");
-          setLeaderboardData([]); // 에러 시 빈 배열로 설정
+          console.error("[Leaderboard] Error fetching leaderboard:", error);
+          setLeaderboardError(
+            "리더보드 데이터를 불러오는 중 오류가 발생했습니다."
+          );
+          setLeaderboardData([]);
         } finally {
           setIsLoadingLeaderboard(false);
         }
       };
-      fetchLeaderboard();
+
+      // 초기 데이터 로드
+      fetchLeaderboardData();
+
+      // 30초마다 자동 새로고침
+      const intervalId = setInterval(fetchLeaderboardData, 30000);
+
+      // 클린업 함수
+      return () => clearInterval(intervalId);
     } else {
-      // activeRoundId를 아직 못 가져왔으면 리더보드 로딩 상태 유지 또는 초기화
+      // 필요한 데이터가 없을 경우 로딩 상태로 표시
       setIsLoadingLeaderboard(true);
       setLeaderboardData([]);
     }
-  }, [activeRoundId]); // activeRoundId가 변경되면 리더보드를 다시 가져옵니다.
-
-  // NEW: 이전 `buyTicketsConfig Effect`를 이 형태로 수정하거나 대체
-  useEffect(() => {
-    // 로딩이 끝났을 때만 검사
-    if (!isLoadingBuyTicketsSimulate) {
-      if (
-        buyTicketsConfig?.request &&
-        !buyTicketsErrorSimulate &&
-        currentTransactionStep === "startingBuySimulation"
-      ) {
-        console.log(
-          "[SimulateEffect] Simulation successful for 'startingBuySimulation'. Transitioning to 'buying'. Request:",
-          buyTicketsConfig.request
-        );
-        setCurrentTransactionStep("buying");
-      } else if (
-        buyTicketsErrorSimulate &&
-        currentTransactionStep === "startingBuySimulation"
-      ) {
-        // 시뮬레이션이 로딩 후 에러로 끝난 경우 (이미 에러 핸들러 useEffect가 있지만, 여기서도 처리 가능)
-        console.error(
-          "[SimulateEffect] Simulation failed for 'startingBuySimulation'. Error:",
-          buyTicketsErrorSimulate
-        );
-        // setCurrentTransactionStep("error"); // 이미 다른 에러 핸들러에서 처리 중
-      }
-    }
   }, [
-    isLoadingBuyTicketsSimulate, // 이 상태의 false로의 변경이 중요
-    buyTicketsConfig,
-    buyTicketsErrorSimulate,
-    currentTransactionStep,
-    // setCurrentTransactionStep // Setter 함수는 일반적으로 의존성 배열에 불필요
+    activeRoundId,
+    lotteryAddress,
+    isClient,
+    isCorrectNetwork,
+    accountAddress,
+    ownedTickets,
   ]);
 
-  // UPDATED: [EFFECT CheckBuyTicketsAsync] -> 이제 [EFFECT SendBuyTransaction] 등으로 이름 변경 가능
-  // buyTicketsAsync 호출 조건 수정
-  useEffect(() => {
-    console.log(
-      "[EFFECT ApproveConfig] Checking conditions. Step:",
-      currentTransactionStep,
-      "Args:",
-      approveArgs,
-      "Config:",
-      !!approveConfig?.request,
-      "isApproving:",
-      isApproving,
-      "Data:",
-      approveData,
-      "isLoadingSim:",
-      isLoadingApproveSimulate
-    );
-
-    if (
-      currentTransactionStep === "approving" &&
-      approveConfig?.request &&
-      approveArgs &&
-      !isApproving &&
-      !approveData &&
-      !isLoadingApproveSimulate
-    ) {
-      console.log(
-        "[EFFECT ApproveConfig] Conditions MET for sending approve transaction. Step:",
-        currentTransactionStep
-      );
-      (async () => {
-        let toastId = "approve-tx-send";
-        try {
-          console.log(
-            "[EFFECT approveAsync] Sending approve transaction with config:",
-            approveConfig.request
-          );
-          toast.loading("URUK 사용 승인 트랜잭션 전송 중...", { id: toastId });
-          await approveAsync(approveConfig.request);
-          console.log("[EFFECT approveAsync] Approve transaction submitted.");
-          toast.success("URUK 사용 승인 트랜잭션이 전송되었습니다.", {
-            id: toastId,
-            duration: 3000,
-          });
-          // isSuccessApprove useEffect에서 다음 단계로 진행
-        } catch (e) {
-          console.error(
-            "[EFFECT approveAsync] Approve transaction submission error:",
-            e
-          );
-          const errorMsg =
-            (e as any)?.shortMessage ||
-            (e as Error)?.message ||
-            "알 수 없는 오류";
-          toast.error(`URUK 사용 승인 오류: ${errorMsg}`, {
-            id: toastId,
-          });
-          setCurrentTransactionStep("error");
-          setIsTransactionProcessing(false);
-          // resetApprove(); // 실패 시 reset
-        }
-      })();
+  // 클라이언트 객체 초기화를 위한 헬퍼 함수
+  const waitForClient = async () => {
+    try {
+      // viem 또는 wagmi에서 제공하는 클라이언트 객체 가져오기
+      const { createPublicClient, http } = await import("viem");
+      const publicClient = createPublicClient({
+        chain: {
+          id: targetChainIdFromEnv,
+          name: targetChain?.name || "Unknown Chain",
+          nativeCurrency: {
+            name: "MONAD",
+            symbol: "MONAD",
+            decimals: 18,
+          },
+          rpcUrls: {
+            default: {
+              http: ["https://rpc.monadcloud.org/testnet"],
+            },
+            public: {
+              http: ["https://rpc.monadcloud.org/testnet"],
+            },
+          },
+        },
+        transport: http("https://rpc.monadcloud.org/testnet"),
+      });
+      return publicClient;
+    } catch (error) {
+      console.error("Error initializing public client:", error);
+      return null;
     }
-  }, [
-    approveConfig,
-    approveAsync,
-    approveArgs,
-    currentTransactionStep,
-    isApproving,
-    approveData,
-    isLoadingApproveSimulate,
-  ]);
-
-  // Approval success effect
-  useEffect(() => {
-    if (isSuccessApprove && approveData) {
-      console.log(
-        `[isSuccessApprove useEffect] Approval transaction successful with hash: ${approveData}. Current step: ${currentTransactionStep}`
-      );
-
-      if (currentTransactionStep !== "approving") {
-        console.log(
-          "[isSuccessApprove useEffect] Not in 'approving' state anymore. Current state:",
-          currentTransactionStep
-        );
-        return;
-      }
-
-      // 승인이 완료되면 다음 단계(buyTickets 시뮬레이션)로 진행
-      console.log(
-        "[isSuccessApprove useEffect] Proceeding to buyTickets simulation."
-      );
-      setBuyTicketsArgs([BigInt(parseInt(quantity, 10))]);
-      setCurrentTransactionStep("startingBuySimulation");
-
-      toast.success(
-        <div className="flex flex-col">
-          <span>URUK 사용 승인 완료!</span>
-          <a
-            href={getExplorerUrl(approveData)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-400 hover:underline mt-1"
-          >
-            View Transaction
-          </a>
-        </div>,
-        { duration: 4000 }
-      );
-    }
-  }, [
-    isSuccessApprove,
-    approveData,
-    currentTransactionStep,
-    setCurrentTransactionStep,
-    setBuyTicketsArgs,
-    quantity,
-  ]);
-
-  // UPDATED: [EFFECT CheckBuyTicketsAsync] -> 이제 [EFFECT SendBuyTransaction] 등으로 이름 변경 가능
-  // buyTicketsAsync 호출 조건 수정
-  useEffect(() => {
-    // 이전 로그 유지
-    console.log(
-      "[EFFECT CheckBuyTicketsAsync] Checking conditions. Step:",
-      currentTransactionStep,
-      "Args:",
-      buyTicketsArgs,
-      "ConfReq:",
-      !!buyTicketsConfig?.request,
-      "isBuying:",
-      isBuyingTickets,
-      "Data:",
-      buyTicketsData,
-      "isLoadingSim:",
-      isLoadingBuyTicketsSimulate
-    );
-
-    if (
-      currentTransactionStep === "buying" && // ★ Step이 'buying'일 때
-      buyTicketsConfig?.request && // ★ 시뮬레이션 결과가 있어야 함
-      buyTicketsArgs && // buyTicketsArgs가 설정되어 있어야 함
-      !isBuyingTickets && // 이미 보내고 있는 중이 아니어야 함
-      !buyTicketsData // 이미 완료된 tx가 없어야 함
-    ) {
-      console.log(
-        "[EFFECT CheckBuyTicketsAsync] Conditions MET for sending buy transaction. Step:",
-        currentTransactionStep
-      );
-      (async () => {
-        let toastId = "buy-tx-send"; // 이전 toastId와 중복 피하기
-        try {
-          console.log(
-            "[EFFECT buyTicketsAsync] Sending buyTickets transaction with config:",
-            buyTicketsConfig.request
-          );
-          toast.loading("티켓 구매 트랜잭션 전송 중...", { id: toastId });
-          await buyTicketsAsync(buyTicketsConfig.request); // 여기서 buyTicketsAsync 호출
-          console.log(
-            "[EFFECT buyTicketsAsync] BuyTickets transaction submitted."
-          );
-          // 성공 토스트는 isSuccessBuyTickets useEffect에서 처리
-        } catch (e) {
-          console.error(
-            "[EFFECT buyTicketsAsync] BuyTickets transaction submission error:",
-            e
-          );
-          const errorMsg =
-            (e as any)?.shortMessage ||
-            (e as Error)?.message ||
-            "알 수 없는 오류";
-          toast.error(`티켓 구매 트랜잭션 제출 오류: ${errorMsg}`, {
-            id: toastId,
-          });
-          setCurrentTransactionStep("error");
-          setIsTransactionProcessing(false);
-          // resetBuyTickets(); // 실패 시 reset
-        }
-      })();
-    } else if (buyTicketsArgs && currentTransactionStep === "buying") {
-      // 'buying' 상태인데 조건 미충족 시 상세 로그
-      console.log(
-        "[EFFECT CheckBuyTicketsAsync] Conditions NOT MET for sending transaction in 'buying' step. Details:",
-        {
-          step: currentTransactionStep,
-          hasConfig: !!buyTicketsConfig?.request,
-          hasArgs: !!buyTicketsArgs,
-          isBuying: isBuyingTickets,
-          hasData: !!buyTicketsData,
-        }
-      );
-    }
-  }, [
-    buyTicketsConfig,
-    buyTicketsAsync,
-    buyTicketsArgs,
-    currentTransactionStep,
-    isBuyingTickets,
-    buyTicketsData,
-    isLoadingBuyTicketsSimulate, // 이 효과에서 isLoadingBuyTicketsSimulate도 확인 (무한루프 방지 등)
-    // 상태설정 함수는 의존성 배열에서 일반적으로 제외
-  ]);
-
-  // UPDATED: Transaction completion effect (Toast 알림 추가)
-  useEffect(() => {
-    if (isSuccessBuyTickets && buyTicketsData) {
-      console.log(
-        `[isSuccessBuyTickets useEffect] Transaction successful with hash: ${buyTicketsData}. Current step: ${currentTransactionStep}`
-      ); // 로그 추가
-
-      // 이미 completed 상태이거나 다른 상태로 넘어갔으면 중복 실행 방지 (선택적)
-      if (currentTransactionStep === "completed") {
-        console.log(
-          "[isSuccessBuyTickets useEffect] Already completed. Skipping."
-        );
-        return;
-      }
-
-      setCurrentTransactionStep("completed");
-
-      toast.success(
-        <div className="flex flex-col">
-          <span>
-            {buyTicketsArgs?.[0]?.toString() || quantity}개의 티켓 구매 성공!
-          </span>
-          {buyTicketsData && (
-            <a
-              href={getExplorerUrl(buyTicketsData)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-400 hover:underline mt-1"
-            >
-              View Transaction
-            </a>
-          )}
-        </div>,
-        { duration: 5000 }
-      );
-
-      setQuantity("");
-      refetchUrukBalance();
-      refetchOwnedTickets();
-      // refetchUrukAllowance(); // maxUint256이므로 필수는 아님
-      refetchLotteryPoolBalance();
-      resetApprove();
-      resetBuyTickets();
-      setApproveArgs(undefined);
-      setBuyTicketsArgs(undefined);
-      setIsTransactionProcessing(false); // ★ 무한 로딩 해결의 핵심
-      console.log(
-        "[isSuccessBuyTickets useEffect] Transaction processing finished. isTransactionProcessing: false"
-      );
-    } else if (
-      buyTicketsData &&
-      !isSuccessBuyTickets &&
-      !isConfirmingBuyTickets &&
-      currentTransactionStep !== "error"
-    ) {
-      // 트랜잭션 해시는 있는데 아직 성공/확인중이 아닌 경우 (예: 실패했지만 isError 플래그가 없는 경우)
-      console.warn(
-        `[isSuccessBuyTickets useEffect] buyTicketsData exists (${buyTicketsData}), but isSuccessBuyTickets is false and not confirming. Current step: ${currentTransactionStep}. This might indicate a stalled or failed tx not caught by error handlers.`
-      );
-    }
-  }, [
-    isSuccessBuyTickets,
-    isConfirmingBuyTickets, // 의존성 추가
-    buyTicketsData,
-    currentTransactionStep, // currentTransactionStep을 의존성에 추가하여 상태 변경 시 재평가 (순환 주의)
-    refetchUrukBalance,
-    refetchOwnedTickets,
-    // refetchUrukAllowance,
-    refetchLotteryPoolBalance,
-    quantity, // toast 메시지에 사용
-    resetApprove,
-    resetBuyTickets,
-    buyTicketsArgs, // toast 메시지에 사용
-    setCurrentTransactionStep, // 상태 변경 함수 의존성 추가 (ESLint 권고 시)
-    setIsTransactionProcessing, // 상태 변경 함수 의존성 추가 (ESLint 권고 시)
-    setQuantity,
-    setApproveArgs,
-    setBuyTicketsArgs, // 추가적인 setter 함수들
-  ]);
+  };
 
   // 바로 이 아래에 handleQuantityChange 함수를 추가합니다.
   const handleQuantityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -925,7 +944,14 @@ export default function Home() {
         );
         // buyTickets 함수는 티켓 개수를 받는다고 가정
         setBuyTicketsArgs([ticketsToBuyBigInt]);
-        setCurrentTransactionStep("startingBuySimulation");
+
+        // 명시적으로 상태 변경 딜레이를 줘서 상태 업데이트가 확실히 반영되도록 함
+        setTimeout(() => {
+          console.log(
+            "[handleSubmitTickets] Setting transaction step to startingBuySimulation"
+          );
+          setCurrentTransactionStep("startingBuySimulation");
+        }, 500);
       }
     } catch (error: any) {
       console.error("[handleSubmitTickets] Error:", error);
@@ -1022,6 +1048,125 @@ export default function Home() {
     setIsClient(true);
     console.log("[useEffect setIsClient] setIsClient(true) called."); // 로그 추가
   }, []);
+
+  // 티켓 구매 트랜잭션 시뮬레이션 및 단계 전환
+  useEffect(() => {
+    // 로딩이 끝났을 때만 검사
+    console.log(
+      "[SimulateEffect] Status check - Loading:",
+      isLoadingBuyTicketsSimulate,
+      "Step:",
+      currentTransactionStep,
+      "Config:",
+      !!buyTicketsConfig?.request,
+      "Error:",
+      !!buyTicketsErrorSimulate
+    );
+
+    if (!isLoadingBuyTicketsSimulate) {
+      if (
+        buyTicketsConfig?.request &&
+        !buyTicketsErrorSimulate &&
+        currentTransactionStep === "startingBuySimulation"
+      ) {
+        console.log(
+          "[SimulateEffect] 시뮬레이션 성공. 'startingBuySimulation'에서 'buying'으로 전환. Request:",
+          buyTicketsConfig.request
+        );
+        setCurrentTransactionStep("buying");
+      } else if (
+        buyTicketsErrorSimulate &&
+        currentTransactionStep === "startingBuySimulation"
+      ) {
+        // 시뮬레이션 오류 처리
+        console.error(
+          "[SimulateEffect] 시뮬레이션 실패. 오류:",
+          buyTicketsErrorSimulate
+        );
+        const errorMsg =
+          (buyTicketsErrorSimulate as any)?.shortMessage ||
+          buyTicketsErrorSimulate?.message ||
+          "알 수 없는 오류";
+        toast.error(`티켓 구매 시뮬레이션 실패: ${errorMsg}`);
+        setCurrentTransactionStep("error");
+        setIsTransactionProcessing(false);
+      }
+    }
+  }, [
+    isLoadingBuyTicketsSimulate,
+    buyTicketsConfig,
+    buyTicketsErrorSimulate,
+    currentTransactionStep,
+    setCurrentTransactionStep,
+    setIsTransactionProcessing,
+  ]);
+
+  // 티켓 구매 트랜잭션 실행 (개선된 통합 버전)
+  useEffect(() => {
+    // 상태 로깅
+    console.log(
+      "[BuyTransaction] 상태 확인 - 단계:",
+      currentTransactionStep,
+      "Args:",
+      buyTicketsArgs,
+      "요청생성:",
+      !!buyTicketsConfig?.request,
+      "전송중:",
+      isBuyingTickets,
+      "전송완료:",
+      !!buyTicketsData,
+      "로딩중:",
+      isLoadingBuyTicketsSimulate
+    );
+
+    // 조건: 티켓 구매 단계에서 트랜잭션 전송
+    if (
+      currentTransactionStep === "buying" &&
+      buyTicketsConfig?.request &&
+      buyTicketsArgs &&
+      !isBuyingTickets &&
+      !buyTicketsData
+    ) {
+      console.log(
+        "[BuyTransaction] 티켓 구매 트랜잭션 조건 충족, 트랜잭션 전송 시작"
+      );
+
+      // 트랜잭션 실행
+      (async () => {
+        const toastId = "buy-tickets-tx";
+        try {
+          toast.loading("티켓 구매 트랜잭션 전송 중...", { id: toastId });
+
+          // 트랜잭션 전송
+          await buyTicketsAsync(buyTicketsConfig.request);
+
+          console.log("[BuyTransaction] 트랜잭션 전송 성공");
+          // 트랜잭션 확인은 isSuccessBuyTickets useEffect에서 처리
+        } catch (error) {
+          console.error("[BuyTransaction] 트랜잭션 전송 실패:", error);
+          const errorMsg =
+            (error as any)?.shortMessage ||
+            (error as Error)?.message ||
+            "알 수 없는 오류";
+          toast.error(`티켓 구매 실패: ${errorMsg}`, { id: toastId });
+
+          // 오류 발생 시 상태 초기화
+          setCurrentTransactionStep("error");
+          setIsTransactionProcessing(false);
+        }
+      })();
+    }
+  }, [
+    buyTicketsConfig,
+    buyTicketsAsync,
+    buyTicketsArgs,
+    currentTransactionStep,
+    isBuyingTickets,
+    buyTicketsData,
+    isLoadingBuyTicketsSimulate,
+    setCurrentTransactionStep,
+    setIsTransactionProcessing,
+  ]);
 
   return (
     <PageLayout>
