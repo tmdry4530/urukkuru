@@ -2,25 +2,81 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Joystix 폰트 설정 */
+@font-face {
+  font-family: "Joystix";
+  src: url("/fonts/joystix-monospace.otf") format("opentype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 26, 0, 40;
+  --background-start-rgb: 0, 0, 0;
   --background-end-rgb: 0, 0, 0;
 }
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+  font-size: 14px; /* 기본 폰트 크기 조정 */
 }
 
-@layer utilities {
-  .animate-gradient {
-    background-size: 200% 200%;
-    animation: gradient 8s ease infinite;
+/* 폰트를 적용할 클래스 - 모든 요소에 적용하지 않고 선택적으로 적용 */
+.font-joystix {
+  font-family: "Joystix", monospace;
+  letter-spacing: -0.03em; /* 글자 간격 약간 줄임 */
+  line-height: 1.4; /* 줄 간격 조정 */
+}
+
+@layer base {
+  /* 텍스트 관련 기본 스타일 */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-medium mb-2;
+  }
+
+  /* 글자 크기 스케일 조정 */
+  h1 {
+    @apply text-xl;
+  }
+  h2 {
+    @apply text-lg;
+  }
+  h3 {
+    @apply text-base;
+  }
+
+  /* 버튼 및 입력 요소 */
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
   }
 }
 
-@keyframes gradient {
+/* 애니메이션 효과 */
+.animate-gradient {
+  background-size: 300%;
+  -webkit-animation: animatedgradient 6s ease infinite alternate;
+  -moz-animation: animatedgradient 6s ease infinite alternate;
+  animation: animatedgradient 6s ease infinite alternate;
+}
+
+@keyframes animatedgradient {
   0% {
     background-position: 0% 50%;
   }
@@ -30,4 +86,14 @@ body {
   100% {
     background-position: 0% 50%;
   }
+}
+
+/* FOUT(Flash of Unstyled Text) 방지를 위한 스타일 */
+.font-loaded .font-joystix {
+  opacity: 1;
+  transition: opacity 0.1s ease-in;
+}
+
+.font-loading .font-joystix {
+  opacity: 0.9;
 }

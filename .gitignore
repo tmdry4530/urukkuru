@@ -16,6 +16,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+/backend/
 # env files
 .env*
 
@@ -25,3 +26,21 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+node_modules
+.env
+
+# Hardhat files
+/cache
+/artifacts
+
+# TypeChain files
+/typechain
+/typechain-types
+
+# solidity-coverage files
+/coverage
+/coverage.json
+
+# Hardhat Ignition default folder for deployments against a local node
+ignition/deployments/chain-31337

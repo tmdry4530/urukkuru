@@ -3,8 +3,16 @@ import type { Metadata } from "next";
 import { Pixelify_Sans } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet-provider";
+import "@rainbow-me/rainbowkit/styles.css";
+import { Toaster } from "react-hot-toast";
+import { Inter } from "next/font/google";
 
 const pixelifySans = Pixelify_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const inter = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
 });
@@ -20,12 +28,12 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const showComingSoonModal = true; // 이 값을 false로 바꾸면 모달이 사라집니다.
+  const showComingSoonModal = false; // 이 값을 false로 바꾸면 모달이 사라집니다.
 
   if (showComingSoonModal) {
     return (
-      <html lang="en">
-        <body className={pixelifySans.className}>
+      <html lang="en" className="min-h-screen">
+        <body className="min-h-screen bg-gradient-to-b from-purple-900/20 to-black">
           <div
             style={{
               position: "fixed",
@@ -81,9 +89,12 @@ export default function RootLayout({
   }
 
   return (
-    <html lang="en">
-      <body className={pixelifySans.className}>
-        <WalletProvider>{children}</WalletProvider>
+    <html lang="en" className="min-h-screen">
+      <body className="min-h-screen bg-gradient-to-b from-purple-900/20 to-black">
+        <WalletProvider>
+          {children}
+          <Toaster position="bottom-right" />
+        </WalletProvider>
       </body>
     </html>
   );
