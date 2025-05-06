@@ -511,6 +511,107 @@ export default function Home() {
     refetchUrukAllowance,
   ]);
 
+  // 허용량(approve) 트랜잭션 완료 후 티켓 구매로 진행하는 useEffect 추가
+  useEffect(() => {
+    if (isSuccessApprove && currentTransactionStep === "approving") {
+      console.log(
+        "[ApproveSuccess] Token approval successful, proceeding to ticket purchase"
+      );
+
+      // 허용량 승인 성공 토스트 메시지
+      toast.success("Token approval successful! Proceeding to purchase...");
+
+      // 원래 handleSubmitTickets에서 입력된 quantity 가져오기
+      const numQuantity = parseInt(quantity, 10);
+      if (
+        isNaN(numQuantity) ||
+        numQuantity <= 0 ||
+        urukDecimals === undefined
+      ) {
+        console.error("[ApproveSuccess] Invalid quantity or missing decimals");
+        setCurrentTransactionStep("error");
+        return;
+      }
+
+      // 티켓 구매 인자 설정
+      const ticketsToBuyBigInt = BigInt(numQuantity);
+      setBuyTicketsArgs([ticketsToBuyBigInt]);
+
+      // 상태 업데이트 - 시뮬레이션 시작 단계로 전환
+      setTimeout(() => {
+        console.log(
+          "[ApproveSuccess] Setting transaction step to startingBuySimulation"
+        );
+        setCurrentTransactionStep("startingBuySimulation");
+      }, 500);
+    }
+  }, [isSuccessApprove, currentTransactionStep, quantity, urukDecimals]);
+
+  // 허용량 승인(approve) 트랜잭션 실행 추가
+  useEffect(() => {
+    // 상태 로그
+    console.log(
+      "[ApproveTransaction] Status check - Step:",
+      currentTransactionStep,
+      "Args:",
+      approveArgs,
+      "Config:",
+      !!approveConfig?.request,
+      "Approving:",
+      isApproving,
+      "Approved:",
+      !!approveData
+    );
+
+    // 조건: 'approving' 상태일 때 트랜잭션 전송
+    if (
+      currentTransactionStep === "approving" &&
+      approveConfig?.request &&
+      approveArgs &&
+      !isApproving &&
+      !approveData
+    ) {
+      console.log(
+        "[ApproveTransaction] Token approval conditions met, sending transaction"
+      );
+
+      // 트랜잭션 실행
+      (async () => {
+        const toastId = "approve-token-tx";
+        try {
+          toast.loading("Sending token approval transaction...", {
+            id: toastId,
+          });
+
+          // 트랜잭션 전송
+          await approveAsync(approveConfig.request);
+
+          console.log(
+            "[ApproveTransaction] Approval transaction sent successfully"
+          );
+          // 트랜잭션 확인은 isSuccessApprove useEffect에서 처리
+        } catch (error) {
+          console.error("[ApproveTransaction] Approval sending failed:", error);
+          const errorMsg =
+            (error as any)?.shortMessage ||
+            (error as Error)?.message ||
+            "Unknown error";
+          toast.error(`Token approval failed: ${errorMsg}`, { id: toastId });
+
+          // 오류 발생 시 상태 초기화
+          setCurrentTransactionStep("error");
+        }
+      })();
+    }
+  }, [
+    approveConfig,
+    approveAsync,
+    approveArgs,
+    currentTransactionStep,
+    isApproving,
+    approveData,
+  ]);
+
   // Animate glow effect (existing logic maintained)
   useEffect(() => {
     const interval = setInterval(() => {
