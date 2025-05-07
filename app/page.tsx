@@ -72,7 +72,9 @@ const targetChainIdFromEnv = parseInt(
 ); // Default Monad Testnet ID, decimal
 
 // TODO: Change to actual leaderboard API endpoint URL
-const LEADERBOARD_API_URL = "/api/leaderboard?roundId="; // Example API path
+const LEADERBOARD_API_URL = process.env.NEXT_PUBLIC_BACKEND_URL
+  ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/leaderboard?roundId=`
+  : "/api/leaderboard?roundId="; // Example API path
 
 // Address truncation utility function
 const truncateAddress = (address: string) => {
@@ -593,7 +595,6 @@ export default function Home() {
               const poolResult = await refetchLotteryPoolBalance();
               console.log("[티켓구매성공] 상금 풀 새로고침 결과:", poolResult);
 
-              // URUK 토큰 잔액 새로고침 추가
               const balanceResult = await refetchUrukBalance();
               console.log(
                 "[티켓구매성공] URUK 잔액 새로고침 결과:",
@@ -1141,7 +1142,9 @@ export default function Home() {
 
       try {
         // 서버 API 엔드포인트 - 실제 구현 시 정확한 URL로 변경 필요
-        const serverUrl = "/api/status";
+        const serverUrl = process.env.NEXT_PUBLIC_BACKEND_URL
+          ? `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/status`
+          : "/api/status";
         console.log("[Server] 백엔드 API 호출 시도:", serverUrl);
 
         const response = await fetch(serverUrl, {
@@ -1392,25 +1395,17 @@ export default function Home() {
   useEffect(() => {
     if (isSuccessApprove) {
       console.log("[Approve] 승인 완료, 티켓 구매 로직으로 이동");
-      toast.success("Token approval complete! Proceeding to buy tickets.");
+      const toastId = "approve-tx";
+      toast.success("Token approval complete! Proceeding to buy tickets.", {
+        id: toastId,
+      });
 
       // 기존 상태 초기화 후 구매 로직 재호출
-      // setCurrentTransactionStep("preparing"); // 이 부분은 handleSubmitTickets에서 처리
-
-      // handleSubmitTickets 재실행하여 buyTickets 진행
-      // 주의: quantity 상태가 여기서 사용되지 않도록 handleSubmitTickets 내부 로직을 잘 확인해야 함
-      // 또는, approve 직후에는 quantity를 다시 입력받도록 유도할 수도 있음
-      // 현재는 approve 후 바로 이어서 구매 시도
       setTimeout(() => {
-        // approve 완료 후 handleSubmitTickets를 직접 호출할 때,
-        // quantity가 이전 값으로 남아있으면 안되므로, 여기서 quantity를 비우거나,
-        // handleSubmitTickets가 quantity를 직접 참조하지 않도록 해야 함.
-        // 가장 간단한 방법은 approve 후 사용자가 다시 제출 버튼을 누르도록 유도하는 것.
-        // 여기서는 일단 자동으로 이어가도록 두되, 이 부분을 인지.
         handleSubmitTickets();
       }, 300);
     }
-  }, [isSuccessApprove /* 의존성에 handleSubmitTickets 추가 고려 */]);
+  }, [isSuccessApprove, handleSubmitTickets]);
 
   // 마운트 및 의존성 변경 시 컨트랙트에서 보유 티켓 즉시 조회
   useEffect(() => {
