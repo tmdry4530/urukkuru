@@ -92,8 +92,11 @@ export function Header() {
     let animationFrameId: number;
     let lastUpdateTime = 0;
     const updateInterval = 100; // 100ms, same as original setInterval
+    let isRunning = true;
 
     const animateGlow = (timestamp: number) => {
+      if (!isRunning) return;
+
       if (timestamp - lastUpdateTime >= updateInterval) {
         setGlowIntensity((prev) => {
           const newValue = prev + 0.05 * (Math.random() > 0.5 ? 1 : -1);
@@ -105,7 +108,13 @@ export function Header() {
     };
 
     animationFrameId = requestAnimationFrame(animateGlow);
-    return () => cancelAnimationFrame(animationFrameId);
+
+    return () => {
+      isRunning = false;
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
   }, []); // Empty dependency array means this runs once on mount and cleans up on unmount
 
   const showUserBalance = isClient && isConnected && isCorrectNetwork;

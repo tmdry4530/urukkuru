@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/*
- * UrukLottery ? 30?minute window, 1 URUK = 1 ticket, blockhash RNG
- * UX ?? ? ??: buyTickets(uint256 **ticketCount**)  ? ????? ??? ???? ??? ??
- */
-
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -14,12 +9,11 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 contract UrukLottery is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20Metadata;
 
-    uint256 public constant DEV_FEE_BPS = 250; // 2.5?%
+    uint256 public constant DEV_FEE_BPS = 250;
     uint256 public constant BPS_DENOM = 10_000;
-    uint256 public constant ROUND_SPAN = 6 hours; // 3분에서 10분으로 변경
 
     IERC20Metadata public immutable uruk;
-    uint256 public immutable ticketUnit; // 1 URUK (???)
+    uint256 public immutable ticketUnit;
     uint8 public immutable decimals;
 
     address public devWallet;
@@ -64,54 +58,41 @@ contract UrukLottery is Ownable, ReentrancyGuard {
         devWallet = _devWallet;
     }
 
-    /* helpers */
-    function activeRoundId() public view returns (uint256) {
-        return block.timestamp / ROUND_SPAN;
-    }
-    function roundEnd(uint256 r) public pure returns (uint256) {
-        return (r + 1) * ROUND_SPAN;
-    }
-
-    /* buy ? ??? **?? ??**(??)? ?? */
-    function buyTickets(uint256 ticketCount) external nonReentrant {
+    // buyTickets에서 roundId를 파라미터로 받음
+    function buyTickets(
+        uint256 roundId,
+        uint256 ticketCount
+    ) external nonReentrant {
         require(ticketCount > 0, "ticket 0");
         uint256 amount = ticketCount * ticketUnit;
 
-        uint256 rid = activeRoundId();
-        Round storage r = rounds[rid];
+        Round storage r = rounds[roundId];
 
-        // transferFrom - ERC20 revert ??? explorer ?? ???
         uruk.safeTransferFrom(msg.sender, address(this), amount);
 
-        uint256 pos = indexOf[rid][msg.sender];
+        uint256 pos = indexOf[roundId][msg.sender];
         if (pos == 0) {
-            plist[rid].push(Participant(msg.sender, ticketCount));
-            indexOf[rid][msg.sender] = plist[rid].length;
+            plist[roundId].push(Participant(msg.sender, ticketCount));
+            indexOf[roundId][msg.sender] = plist[roundId].length;
         } else {
-            plist[rid][pos - 1].tickets += ticketCount;
+            plist[roundId][pos - 1].tickets += ticketCount;
         }
         r.ticketCount += ticketCount;
         r.pot += amount;
 
-        emit TicketPurchased(rid, msg.sender, ticketCount, amount);
+        emit TicketPurchased(roundId, msg.sender, ticketCount, amount);
     }
 
-    /* draw */
-    function draw() external nonReentrant {
-        uint256 rid = activeRoundId() - 1;
-        Round storage r = rounds[rid];
-        require(
-            !r.completed &&
-                block.timestamp >= roundEnd(rid) &&
-                r.ticketCount > 0,
-            "state"
-        );
+    // draw도 roundId를 파라미터로 받음
+    function draw(uint256 roundId) external nonReentrant {
+        Round storage r = rounds[roundId];
+        require(!r.completed && r.ticketCount > 0, "state");
 
         uint256 rand = uint256(
             keccak256(
                 abi.encodePacked(
                     blockhash(block.number - 1),
-                    rid,
+                    roundId,
                     r.pot,
                     address(this)
                 )
@@ -120,7 +101,7 @@ contract UrukLottery is Ownable, ReentrancyGuard {
 
         uint256 acc;
         address winner;
-        Participant[] storage arr = plist[rid];
+        Participant[] storage arr = plist[roundId];
         for (uint256 i; i < arr.length; ++i) {
             acc += arr[i].tickets;
             if (rand < acc) {
@@ -135,27 +116,24 @@ contract UrukLottery is Ownable, ReentrancyGuard {
         uruk.safeTransfer(winner, r.pot - devFee);
         uruk.safeTransfer(devWallet, devFee);
 
-        emit WinnerSelected(rid, winner, r.pot - devFee, devFee);
+        emit WinnerSelected(roundId, winner, r.pot - devFee, devFee);
     }
 
-    /* view functions */
+    // getTicketsOf 등 view 함수는 동일하게 roundId를 파라미터로 받음
     function getTicketsOf(
         address user,
         uint256 roundId
     ) external view returns (uint256) {
         uint256 index = indexOf[roundId][user];
         if (index == 0) {
-            // User did not participate or round doesn't exist for user
             return 0;
         }
-        // Ensure index is within bounds (should be guaranteed by indexOf logic, but for safety)
         if (index > plist[roundId].length) {
             return 0;
         }
         return plist[roundId][index - 1].tickets;
     }
 
-    /* admin */
     function setDevWallet(address w) external onlyOwner {
         require(w != address(0));
         devWallet = w;

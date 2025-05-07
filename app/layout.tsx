@@ -28,7 +28,7 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const showComingSoonModal = false; // 이 값을 false로 바꾸면 모달이 사라집니다.
+  const showComingSoonModal = true; // 이 값을 false로 바꾸면 모달이 사라집니다.
 
   if (showComingSoonModal) {
     return (

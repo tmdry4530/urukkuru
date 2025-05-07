@@ -101,6 +101,26 @@ interface TicketPurchaseEvent {
   paid: bigint;
 }
 
+// Server-side round information
+interface RoundInfo {
+  currentRoundId: string;
+  nextDrawTime: number;
+  timeRemaining: number;
+  roundEndTimestamp: number;
+}
+
+// Server status response
+interface ServerStatus {
+  success: boolean;
+  currentRound: string;
+  previousRound: string;
+  serverTime: {
+    timestamp: number;
+    iso: string;
+  };
+  roundInfo: RoundInfo;
+}
+
 export default function Home() {
   const [isClient, setIsClient] = useState(false);
   const [countdown, setCountdown] = useState<{
@@ -138,6 +158,12 @@ export default function Home() {
   );
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
+
+  // 백엔드로부터 라운드 정보 가져오기
+  const [serverRoundInfo, setServerRoundInfo] = useState<RoundInfo | null>(
+    null
+  );
+  const [isLoadingServerInfo, setIsLoadingServerInfo] = useState(true);
 
   const {
     address: accountAddress,
@@ -283,6 +309,30 @@ export default function Home() {
       staleTime: 1000 * 60 * 60 * 6, // 6 hours
     },
   });
+
+  // 디버그 로그 추가 - roundEndTimeData 값과 현재 시간 차이 확인
+  useEffect(() => {
+    if (roundEndTimeData !== undefined) {
+      const now = Math.floor(Date.now() / 1000) + timeOffset;
+      const endTime = Number(roundEndTimeData);
+      const diff = endTime - now;
+      const hours = Math.floor(diff / 3600);
+      const minutes = Math.floor((diff % 3600) / 60);
+
+      console.log(
+        "[DEBUG] Contract roundEnd 원시 데이터:",
+        roundEndTimeData.toString()
+      );
+      console.log(
+        "[DEBUG] 변환된 종료 시간:",
+        new Date(endTime * 1000).toISOString()
+      );
+      console.log("[DEBUG] 현재 시간:", new Date(now * 1000).toISOString());
+      console.log(`[DEBUG] 남은 시간: ${hours}시간 ${minutes}분 (${diff}초)`);
+      console.log("[DEBUG] ROUND_SPAN이 6시간인지 확인:");
+      console.log("[DEBUG] 계약 값:", "6 hours");
+    }
+  }, [roundEndTimeData, timeOffset]);
 
   // Set roundEndTime state when data is available (modified part)
   useEffect(() => {
@@ -693,7 +743,10 @@ export default function Home() {
   // UPDATED: Countdown timer - server time based
   const calculateCountdown = useCallback(() => {
     if (roundEndTime === null || roundEndTime === undefined) {
-      setCountdown(null);
+      // 기존 상태와 비교하여 변경될 때만 업데이트
+      if (countdown !== null) {
+        setCountdown(null);
+      }
       return true; // Indicate timer should stop if no end time
     }
 
@@ -709,157 +762,320 @@ export default function Home() {
     }
 
     if (remainingSeconds <= 0) {
-      setCountdown({ hours: 0, minutes: 0, seconds: 0 });
+      // 기존 상태와 비교하여 변경될 때만 업데이트
+      if (
+        countdown === null ||
+        countdown.hours !== 0 ||
+        countdown.minutes !== 0 ||
+        countdown.seconds !== 0
+      ) {
+        setCountdown({ hours: 0, minutes: 0, seconds: 0 });
+      }
       return true;
     } else {
       const hours = Math.floor(remainingSeconds / 3600);
       const minutes = Math.floor((remainingSeconds % 3600) / 60);
       const seconds = remainingSeconds % 60;
-      setCountdown({ hours, minutes, seconds });
+
+      // 기존 상태와 비교하여 변경될 때만 업데이트
+      if (
+        countdown === null ||
+        countdown.hours !== hours ||
+        countdown.minutes !== minutes ||
+        countdown.seconds !== seconds
+      ) {
+        setCountdown({ hours, minutes, seconds });
+      }
       return false;
     }
-  }, [roundEndTime, timeOffset]);
+  }, [roundEndTime, timeOffset, countdown]);
 
   const isProcessingNewRound = useRef(false); // useRef to prevent duplicate processing flag
   const queryClient = useQueryClient(); // Query Client instance
 
-  useEffect(() => {
-    const stopped = calculateCountdown();
+  // 백엔드 연결 실패 시 계약에서 직접 정보를 가져오는 폴백 함수
+  const fallbackToContractData = useCallback(async () => {
+    console.warn(
+      "[BackendRound] Attempting fallback: Getting data directly from contract or using static values."
+    );
+    let endTimeSet = false;
 
-    if (
-      stopped &&
-      countdown?.hours === 0 &&
-      countdown?.minutes === 0 &&
-      countdown?.seconds === 0
-    ) {
-      const refreshRoundData = async () => {
-        if (isProcessingNewRound.current) {
-          console.log(
-            "[Countdown] Already processing new round. Preventing duplicate execution."
-          );
-          return;
-        }
-
+    if (activeRoundId !== undefined && roundEndTimeData !== undefined) {
+      try {
+        const endTime = Number(roundEndTimeData);
+        setRoundEndTime(endTime);
+        const now = Math.floor(Date.now() / 1000);
+        const timeRemaining = Math.max(0, endTime - now); // Ensure non-negative
+        setServerRoundInfo({
+          currentRoundId: activeRoundId.toString(),
+          nextDrawTime: endTime,
+          timeRemaining: timeRemaining,
+          roundEndTimestamp: endTime,
+        });
+        endTimeSet = true;
         console.log(
-          "[Countdown] Countdown ended. Starting new round data refresh."
+          `[BackendRound] Fallback data set from contract - Round: ${activeRoundId.toString()}, End time: ${new Date(
+            endTime * 1000
+          ).toISOString()}, Remaining: ${timeRemaining}s`
         );
-        isProcessingNewRound.current = true;
+      } catch (error) {
+        console.error(
+          "[BackendRound] Error setting fallback data from contract:",
+          error
+        );
+      }
+    }
 
-        try {
-          const previousActiveRoundIdString = activeRoundId?.toString();
-          console.log(
-            "[Countdown] Previous round ID:",
-            previousActiveRoundIdString
-          );
+    if (!endTimeSet) {
+      console.warn(
+        "[BackendRound] Contract data for fallback unavailable or failed. Using static fallback end time (6 hours from now)."
+      );
+      const now = Math.floor(Date.now() / 1000);
+      const staticEndTime = now + 6 * 60 * 60; // 6 hours
+      setRoundEndTime(staticEndTime);
+      setServerRoundInfo({
+        currentRoundId: activeRoundId?.toString() ?? "static-fallback",
+        nextDrawTime: staticEndTime,
+        timeRemaining: 6 * 60 * 60,
+        roundEndTimestamp: staticEndTime,
+      });
+      // 사용자에게 상황을 알리는 토스트 메시지를 표시할 수 있습니다.
+      // toast.error("Failed to get complete round details. Displaying estimated time.", { duration: 5000 });
+    }
+  }, [activeRoundId, roundEndTimeData]); // setState 함수들 제거
 
-          // Wait for a moment to allow backend to complete draw and contract state to change (e.g., 10 seconds)
-          // This time may need adjustment based on network conditions and backend logic
-          await new Promise((resolve) => setTimeout(resolve, 10000));
-
-          // Invalidate cached activeRoundId and roundEnd data to force a refetch
-          console.log(
-            "[Countdown] Attempting to invalidate activeRoundId and roundEnd queries"
-          );
-          await queryClient.invalidateQueries({
-            queryKey: ["readContract", lotteryAddress, "activeRoundId"],
-          });
-          await queryClient.invalidateQueries({
-            queryKey: [
-              "readContract",
-              lotteryAddress,
-              "roundEnd",
-              previousActiveRoundIdString, // Using previous ID for query key
-            ],
-          });
-          console.log(
-            "[Countdown] Query invalidation complete. Awaiting data refresh."
-          );
-
-          // Directly call refetch functions to try fetching latest data
-          const activeRoundResult = await refetchActiveRound();
-          const newActiveRoundIdString = activeRoundResult.data?.toString();
-          console.log(
-            "[Countdown] Newly fetched round ID:",
-            newActiveRoundIdString
-          );
-
-          if (
-            newActiveRoundIdString &&
-            newActiveRoundIdString !== previousActiveRoundIdString
-          ) {
-            console.log(
-              `[Countdown] New round #${newActiveRoundIdString} detected! Previous round: #${previousActiveRoundIdString}`
-            );
-            setLastProcessedRoundId(newActiveRoundIdString); // Update to prevent next duplicate processing
-
-            // Add a small delay or check dependency to ensure refetchEndTime gets the correct value after activeRoundId state updates
-            await new Promise((resolve) => setTimeout(resolve, 1000)); // Time for state update reflection
-            const endTimeResult = await refetchEndTime();
-            console.log(
-              "[Countdown] New round end time data:",
-              endTimeResult.data
-            );
-
-            await refetchOwnedTickets();
-            await refetchLotteryPoolBalance();
-            await refetchUrukBalance();
-            await refetchUrukAllowance();
-            await fetchServerTime(); // Synchronize server time
-
-            toast.success(`New round #${newActiveRoundIdString} has started!`);
-            setShowingNewRoundAlert(false); // Reset alert state after successful toast
-          } else {
-            console.log(
-              "[Countdown] Round ID has not changed. Previous ID:",
-              previousActiveRoundIdString,
-              "New ID:",
-              newActiveRoundIdString
-            );
-            // If no change, can retry after some time or display message to user
-            // For now, setting showingNewRoundAlert to false to allow next attempt
-            setShowingNewRoundAlert(false);
-            toast("Waiting for the next round...", {
-              duration: 5000,
-              icon: "⏳",
-            });
-          }
-        } catch (error) {
-          console.error("[Countdown] Error refreshing new round data:", error);
-          toast.error("Failed to fetch next round information.");
-          setShowingNewRoundAlert(false);
-        } finally {
-          // Release processing flag after 10-15 seconds in general cases
-          setTimeout(() => {
-            isProcessingNewRound.current = false;
-            console.log("[Countdown] New round processing flag released.");
-          }, 15000);
-        }
-      };
-
-      refreshRoundData();
+  // 라운드 정보 fetch 함수 (의존성 배열 최적화)
+  const fetchRoundInfoFromBackend = useCallback(async () => {
+    // 클라이언트 측에서만 실행
+    if (!isClient) {
+      console.log("[BackendRound] Client not ready, skipping fetch");
       return;
     }
 
-    const timerId = setInterval(() => {
-      if (calculateCountdown()) {
-        clearInterval(timerId);
-      }
-    }, 1000);
+    try {
+      setIsLoadingServerInfo(true);
+      const response = await fetch("/api/status", {
+        cache: "no-store",
+        headers: { "Cache-Control": "no-cache" },
+        // 타임아웃 설정을 위한 AbortController
+        signal: AbortSignal.timeout(3000), // 3초 타임아웃
+      });
 
-    return () => clearInterval(timerId);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch round info from backend: ${response.status}`
+        );
+      }
+
+      const data = (await response.json()) as ServerStatus;
+      console.log("[BackendRound] Received round info:", data);
+
+      if (data.success && data.roundInfo) {
+        // 서버에서 제공하는 라운드 정보 저장
+        setServerRoundInfo(data.roundInfo);
+
+        // 서버 시간과 로컬 시간의 차이 계산 (시간 동기화)
+        const localTime = Math.floor(Date.now() / 1000);
+        const serverTime = data.serverTime.timestamp;
+        const offset = serverTime - localTime;
+        setTimeOffset(offset);
+
+        // 라운드 종료 시간 설정 (백엔드 기준)
+        setRoundEndTime(data.roundInfo.roundEndTimestamp);
+
+        console.log(
+          `[BackendRound] Current round: ${
+            data.roundInfo.currentRoundId
+          }, End time: ${new Date(
+            data.roundInfo.roundEndTimestamp * 1000
+          ).toISOString()}`
+        );
+        console.log(
+          `[BackendRound] Time remaining: ${data.roundInfo.timeRemaining} seconds`
+        );
+      } else {
+        console.error("[BackendRound] Invalid response from backend:", data);
+        // 폴백: 계약에서 직접 정보 가져오기
+        await fallbackToContractData();
+      }
+    } catch (error) {
+      console.error("[BackendRound] Error fetching round info:", error);
+
+      // 폴백: 계약에서 직접 정보 가져오기
+      await fallbackToContractData();
+    } finally {
+      setIsLoadingServerInfo(false);
+    }
+  }, [isClient, fallbackToContractData]); // setTimeOffset 제거
+
+  // useEffect에서만 isClient를 사용하는 대신,
+  // fetchRoundInfoFromBackend 함수 자체에서 isClient를 체크하도록 변경했으므로
+  // 추가적인 isClient 체크가 필요 없습니다.
+  useEffect(() => {
+    if (!isClient) {
+      console.log("[useEffect setIsClient] Mount effect triggered."); // Log added
+      setIsClient(true);
+      console.log("[useEffect setIsClient] setIsClient(true) called."); // Log added
+      return;
+    }
+
+    // 컴포넌트 마운트 시에만 실행되도록 setTimeout 사용
+    const timer = setTimeout(() => {
+      // 초기 데이터 로딩
+      fetchRoundInfoFromBackend();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [isClient, fetchRoundInfoFromBackend]);
+
+  // 컴포넌트 마운트 후 주기적으로 라운드 정보 가져오기
+  useEffect(() => {
+    if (!isClient) return;
+
+    // 1분마다 새로고침
+    const interval = setInterval(() => {
+      fetchRoundInfoFromBackend();
+    }, 60000); // 60초마다
+
+    return () => clearInterval(interval);
+  }, [isClient, fetchRoundInfoFromBackend]);
+
+  // 카운트다운이 0이 되면 즉시 백엔드에서 새 라운드 정보 가져오기
+  useEffect(() => {
+    if (!isClient) return;
+
+    if (
+      countdown?.hours === 0 &&
+      countdown?.minutes === 0 &&
+      countdown?.seconds <= 5
+    ) {
+      // 5초 이하로 남으면 더 자주 서버에 확인
+      const checkInterval = setInterval(() => {
+        console.log(
+          "[Countdown] Less than 5 seconds remaining, checking for new round..."
+        );
+        fetchRoundInfoFromBackend();
+      }, 1000); // 1초마다
+
+      return () => clearInterval(checkInterval);
+    }
+  }, [isClient, countdown, fetchRoundInfoFromBackend]);
+
+  // 카운트다운 계산 및 라운드 갱신 로직
+  useEffect(() => {
+    if (!isClient) return;
+
+    // 이미 처리 중인 경우 새 타이머 시작하지 않음
+    if (isProcessingNewRound.current) return;
+
+    let isMounted = true; // 컴포넌트가 마운트된 상태인지 추적
+    let timerId: NodeJS.Timeout | null = null;
+
+    // 카운트다운이 0인 경우 새 라운드 데이터 가져오기
+    const handleZeroCountdown = async () => {
+      if (!isMounted || isProcessingNewRound.current) return;
+
+      isProcessingNewRound.current = true;
+      console.log(
+        "[Countdown] Countdown ended. Starting new round data refresh."
+      );
+
+      try {
+        await fetchRoundInfoFromBackend();
+
+        if (!isMounted) return; // 컴포넌트가 언마운트된 경우 중단
+
+        if (
+          serverRoundInfo &&
+          serverRoundInfo.currentRoundId !== lastProcessedRoundId
+        ) {
+          console.log(
+            `[Countdown] New round #${serverRoundInfo.currentRoundId} detected! Previous round: #${lastProcessedRoundId}`
+          );
+
+          if (isMounted) {
+            setLastProcessedRoundId(serverRoundInfo.currentRoundId);
+            setShowingNewRoundAlert(false);
+          }
+
+          // 컨트랙트 데이터 갱신
+          await Promise.all([
+            refetchOwnedTickets(),
+            refetchLotteryPoolBalance(),
+            refetchUrukBalance(),
+            refetchUrukAllowance(),
+          ]);
+
+          if (isMounted) {
+            toast.success(
+              `New round #${serverRoundInfo.currentRoundId} has started!`
+            );
+          }
+        } else {
+          console.log("[Countdown] Round ID has not changed yet. Waiting...");
+
+          if (isMounted) {
+            setShowingNewRoundAlert(false);
+          }
+        }
+      } catch (error) {
+        console.error("[Countdown] Error refreshing new round data:", error);
+        if (isMounted) {
+          toast.error("Failed to fetch next round information.");
+          setShowingNewRoundAlert(false);
+        }
+      } finally {
+        // 5초 후 플래그 해제
+        setTimeout(() => {
+          if (isMounted) {
+            isProcessingNewRound.current = false;
+            console.log("[Countdown] New round processing flag released.");
+          }
+        }, 5000);
+      }
+    };
+
+    // 카운트다운 업데이트 함수
+    const updateCountdown = () => {
+      if (!isMounted) return;
+
+      const stopped = calculateCountdown();
+
+      // 카운트다운이 0이면 새 라운드 데이터 가져오기
+      if (
+        stopped &&
+        countdown?.hours === 0 &&
+        countdown?.minutes === 0 &&
+        countdown?.seconds === 0
+      ) {
+        handleZeroCountdown();
+        return;
+      }
+
+      // 타이머 계속 실행
+      if (timerId) clearTimeout(timerId);
+      timerId = setTimeout(updateCountdown, 1000);
+    };
+
+    // 초기 업데이트 실행
+    updateCountdown();
+
+    // 클린업 함수
+    return () => {
+      isMounted = false;
+      if (timerId) clearTimeout(timerId);
+    };
   }, [
+    isClient,
     calculateCountdown,
     countdown,
-    activeRoundId, // Re-added for previous round ID comparison
-    queryClient,
-    fetchServerTime,
-    refetchActiveRound,
-    refetchEndTime,
+    fetchRoundInfoFromBackend,
+    serverRoundInfo,
+    lastProcessedRoundId,
     refetchOwnedTickets,
     refetchLotteryPoolBalance,
     refetchUrukBalance,
     refetchUrukAllowance,
-    lotteryAddress,
   ]);
 
   // Fetch Leaderboard Data (fetch participant info directly from contract)
@@ -880,42 +1096,109 @@ export default function Home() {
             activeRoundId.toString()
           );
 
-          // Directly fetch participant list via RPC call
-          const entries: LeaderboardEntry[] = [];
+          // Create a map to track each address's ticket count
+          const ticketsMap = new Map<string, bigint>();
 
-          // Add current user's tickets only if they exist and have tickets
-          if (accountAddress && ownedTickets && ownedTickets > BigInt(0)) {
-            entries.push({
-              rank: 0, // Calculate rank later
-              address: accountAddress,
-              tickets: ownedTickets.toString(),
+          // Initialize public client for event logs
+          const publicClient = await waitForClient();
+          if (!publicClient) {
+            throw new Error("Failed to initialize public client");
+          }
+
+          // 현재 라운드의 티켓 구매 이벤트 가져오기
+          try {
+            console.log("[Leaderboard] Querying for TicketPurchased events...");
+
+            const events = await publicClient.getContractEvents({
+              address: lotteryAddress,
+              abi: UrukLotteryABI,
+              eventName: "TicketPurchased",
+              fromBlock: BigInt(0), // 시작 블록
+              toBlock: "latest",
+              args: {
+                rid: activeRoundId, // 현재 라운드 ID 필터링
+              },
+              strict: true,
             });
 
             console.log(
-              "[Leaderboard] Added current user's tickets:",
+              `[Leaderboard] Found ${events.length} ticket purchase events`
+            );
+
+            // 각 이벤트를 처리하여 주소별 티켓 합계 계산
+            events.forEach((event) => {
+              if (event.args && typeof event.args === "object") {
+                const args = event.args as any;
+                if (args.player && args.tickets) {
+                  const player = args.player as string;
+                  const tickets = args.tickets as bigint;
+
+                  // 기존 티켓 수에 추가
+                  const currentTickets = ticketsMap.get(player) || BigInt(0);
+                  ticketsMap.set(player, currentTickets + tickets);
+
+                  console.log(
+                    `[Leaderboard] Player ${player} has ${
+                      currentTickets + tickets
+                    } tickets`
+                  );
+                }
+              }
+            });
+
+            console.log(
+              `[Leaderboard] Processed ${ticketsMap.size} unique players`
+            );
+          } catch (eventError) {
+            console.error("[Leaderboard] Error fetching events:", eventError);
+
+            // 이벤트 쿼리에 실패한 경우에도 현재 사용자의 티켓은 표시
+            console.log(
+              "[Leaderboard] Falling back to current user's tickets only"
+            );
+
+            // 현재 사용자 티켓만 표시
+            if (accountAddress && ownedTickets && ownedTickets > BigInt(0)) {
+              ticketsMap.set(accountAddress, ownedTickets);
+            }
+          }
+
+          // 현재 사용자의 티켓 정보가 정확한지 확인하고 추가 또는 업데이트
+          if (accountAddress && ownedTickets && ownedTickets > BigInt(0)) {
+            ticketsMap.set(accountAddress, ownedTickets);
+            console.log(
+              "[Leaderboard] Updated current user's tickets:",
               ownedTickets.toString()
             );
           }
 
-          // Removed dummy data generation code (test data no longer used)
-          // Implement here if actual contract events or data are needed
+          // ticketsMap을 바탕으로 엔트리 배열 생성
+          const entries: LeaderboardEntry[] = [];
+          ticketsMap.forEach((tickets, address) => {
+            if (tickets > BigInt(0)) {
+              entries.push({
+                rank: 0, // 정렬 후 할당
+                address,
+                tickets: tickets.toString(),
+              });
+            }
+          });
 
-          // Sort by ticket count in descending order
+          // 티켓 수 기준 내림차순 정렬
           entries.sort((a, b) => {
             const ticketsA = BigInt(a.tickets.toString());
             const ticketsB = BigInt(b.tickets.toString());
             return ticketsB > ticketsA ? 1 : ticketsB < ticketsA ? -1 : 0;
           });
 
-          // Assign ranks
+          // 순위 할당
           entries.forEach((entry, index) => {
             entry.rank = index + 1;
           });
 
           setLeaderboardData(entries);
           setLeaderboardError(null);
-
-          console.log("[Leaderboard] Processed entries:", entries);
+          console.log("[Leaderboard] Final processed entries:", entries);
         } catch (error) {
           console.error("[Leaderboard] Error fetching leaderboard:", error);
           setLeaderboardError("Error fetching leaderboard data.");
@@ -963,14 +1246,14 @@ export default function Home() {
           },
           rpcUrls: {
             default: {
-              http: ["https://rpc.monadcloud.org/testnet"],
+              http: ["https://testnet-rpc.monad.xyz"],
             },
             public: {
-              http: ["https://rpc.monadcloud.org/testnet"],
+              http: ["https://testnet-rpc.monad.xyz"],
             },
           },
         },
-        transport: http("https://rpc.monadcloud.org/testnet"),
+        transport: http("https://testnet-rpc.monad.xyz"),
       });
       return publicClient;
     } catch (error) {
