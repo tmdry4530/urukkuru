@@ -1540,14 +1540,14 @@ export default function Home() {
           {/* UPDATED: Leaderboard Box */}
           <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow w-full flex-1">
             <h3 className="text-base font-medium text-purple-200 mb-3 text-center font-joystix">
-              Leaderboard (Round {activeRoundId?.toString() ?? "..."})
+              Leaderboard
             </h3>
             <div className="space-y-2 min-h-[200px]">
               {/* Minimum height added */}
               {isLoadingLeaderboard ? (
                 <div className="flex justify-center items-center h-full">
                   <p className="text-xs text-purple-300 animate-pulse">
-                    Loading leaderboard...
+                    Coming soon...
                   </p>
                 </div>
               ) : leaderboardError ? (
