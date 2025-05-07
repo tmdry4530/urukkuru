@@ -39,7 +39,7 @@ that once bestowed treasures upon them.`,
   return (
     <PageLayout className="font-joystix">
       <div
-        className={`max-w-4xl mx-auto w-full transition-opacity duration-1000 ease-in-out ${
+        className={`max-w-4xl mx-auto w-full transition-opacity duration-1000 ease-in-out font-joystix ${
           pageLoaded ? "opacity-100" : "opacity-0"
         }`}
       >
