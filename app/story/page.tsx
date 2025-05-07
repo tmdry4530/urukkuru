@@ -14,7 +14,7 @@ export default function StoryPage() {
 
   const storyContent = {
     title: "The Legend of Uruk",
-    content: `Do you know the legend of Uruk?
+    content: `Do you know the legend of Uruk? 
 
 Long ago, in a bustling city of ancient Mesopotamia, 
 a mysterious cat appeared. \\n\\n
