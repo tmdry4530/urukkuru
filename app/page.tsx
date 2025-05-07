@@ -574,7 +574,9 @@ export default function Home() {
             }
           }
 
-          toast.success(`${numQuantity}장의 티켓을 성공적으로 구매했습니다!`);
+          toast.success(`Successfully purchased ${numQuantity} tickets!`, {
+            id: "buy-tickets-tx",
+          });
 
           // 중요: 트랜잭션 성공 후 quantity 초기화
           setQuantity("");
@@ -590,6 +592,13 @@ export default function Home() {
 
               const poolResult = await refetchLotteryPoolBalance();
               console.log("[티켓구매성공] 상금 풀 새로고침 결과:", poolResult);
+
+              // URUK 토큰 잔액 새로고침 추가
+              const balanceResult = await refetchUrukBalance();
+              console.log(
+                "[티켓구매성공] URUK 잔액 새로고침 결과:",
+                balanceResult
+              );
 
               const poolData = poolResult.data;
               if (poolData !== undefined) {
@@ -640,6 +649,7 @@ export default function Home() {
     urukDecimals,
     refetchOwnedTickets,
     refetchLotteryPoolBalance,
+    refetchUrukBalance,
   ]);
 
   // 백엔드에서 사용자 티켓 정보를 가져오는 함수
@@ -1540,14 +1550,14 @@ export default function Home() {
           {/* UPDATED: Leaderboard Box */}
           <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow w-full flex-1">
             <h3 className="text-base font-medium text-purple-200 mb-3 text-center font-joystix">
-              Leaderboard (Round {activeRoundId?.toString() ?? "..."})
+              Leaderboard
             </h3>
             <div className="space-y-2 min-h-[200px]">
               {/* Minimum height added */}
               {isLoadingLeaderboard ? (
                 <div className="flex justify-center items-center h-full">
-                  <p className="text-xs text-purple-300 animate-pulse">
-                    Loading leaderboard...
+                  <p className="text-lg text-purple-300 animate-pulse">
+                    Coming Soon...
                   </p>
                 </div>
               ) : leaderboardError ? (
