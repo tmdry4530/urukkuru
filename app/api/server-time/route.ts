@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-// 백엔드 서버 URL (환경 변수로 관리하는 것이 좋음)
+// Backend server URL (using environment variable is recommended)
 const BACKEND_URL = "http://localhost:3001";
 
-// 요청 추적을 위한 카운터
+// Request tracking counters
 let apiRequestCount = 0;
 let lastBackendSuccess = false;
 let lastRequestTime = 0;
@@ -15,20 +15,19 @@ export async function GET() {
   const requestId = `REQ-${apiRequestCount}-${Math.floor(
     Math.random() * 1000
   )}`;
-  console.log(
-    `[Next API ${requestId}] 백엔드 서버에 시간 요청 시작 (${apiRequestCount}번째 요청)`
-  );
+  // console.log(
+  //   `[Next API ${requestId}] Requesting server time from backend (${apiRequestCount})`
+  // );
 
   try {
-    // 요청 간격 확인 (디버깅용)
     const now = Date.now();
     const timeSinceLastRequest =
       lastRequestTime > 0 ? now - lastRequestTime : 0;
     lastRequestTime = now;
 
-    // 백엔드 서버에서 시간 정보 가져오기
+    // Fetch time information from backend server
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2초로 타임아웃 단축
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // Shortened timeout to 2 seconds
 
     const response = await fetch(`${BACKEND_URL}/api/server-time`, {
       signal: controller.signal,
@@ -43,18 +42,18 @@ export async function GET() {
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      throw new Error(`백엔드 서버 응답 오류: ${response.status}`);
+      throw new Error(`Backend server response error: ${response.status}`);
     }
 
     const data = await response.json();
     lastBackendSuccess = true;
 
     const requestDuration = Date.now() - requestStart;
-    console.log(
-      `[Next API ${requestId}] 백엔드 시간 수신 성공: ${data.iso} (소요시간: ${requestDuration}ms, 요청 간격: ${timeSinceLastRequest}ms)`
-    );
+    // console.log(
+    //   `[Next API ${requestId}] Successfully received backend time: ${data.iso} (Duration: ${requestDuration}ms, Interval: ${timeSinceLastRequest}ms)`
+    // );
 
-    // 백엔드 서버 응답에 추가 정보 포함하여 전달
+    // Include additional info in the response from backend server
     const enhancedData = {
       ...data,
       nextApiInfo: {
@@ -68,18 +67,18 @@ export async function GET() {
     return NextResponse.json(enhancedData);
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : "알 수 없는 오류";
+      error instanceof Error ? error.message : "Unknown error";
     console.error(
-      `[Next API ${requestId}] 백엔드 서버 시간 가져오기 오류: ${errorMessage}`
+      `[Next API ${requestId}] Error fetching server time from backend: ${errorMessage}`
     );
 
-    // 백엔드 연결 실패 시 Next.js 서버 시간으로 대체 (폴백)
+    // Fallback to Next.js server time if backend connection fails
     const now = new Date();
     const fallbackData = {
       timestamp: Math.floor(now.getTime() / 1000),
       milliseconds: now.getTime(),
       iso: now.toISOString(),
-      source: "next-fallback",
+      source: "next-fallback", // Indicate this is fallback data
       nextApiInfo: {
         requestId,
         requestCount: apiRequestCount,
@@ -91,6 +90,6 @@ export async function GET() {
     };
 
     lastBackendSuccess = false;
-    return NextResponse.json(fallbackData, { status: 200 });
+    return NextResponse.json(fallbackData, { status: 200 }); // Return 200 OK with fallback data
   }
 }

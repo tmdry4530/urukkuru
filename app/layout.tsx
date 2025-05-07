@@ -28,7 +28,8 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const showComingSoonModal = false; // 이 값을 false로 바꾸면 모달이 사라집니다.
+  // Set this to true to enable the "Coming Soon" modal
+  const showComingSoonModal = false; // Set this value to false to disable the modal.
 
   if (showComingSoonModal) {
     return (
@@ -81,7 +82,7 @@ export default function RootLayout({
               <p style={{ fontSize: "1.3rem" }}>Thank you for your patience.</p>
             </div>
           </div>
-          {/* 모달이 활성화된 동안 기존 콘텐츠는 숨겨지거나 접근할 수 없게 됩니다. */}
+          {/* While the modal is active, existing content is hidden or inaccessible. */}
           {/* <WalletProvider>{children}</WalletProvider> */}
         </body>
       </html>

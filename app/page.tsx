@@ -144,7 +144,7 @@ export default function Home() {
   // Control whether to display the new round notification
   const [showingNewRoundAlert, setShowingNewRoundAlert] =
     useState<boolean>(false);
-  // 티켓 구매 후 임시 티켓 수 표시용 상태
+  // State for temporarily displaying ticket count after purchase
   const [pendingTicketCount, setPendingTicketCount] = useState<bigint | null>(
     null
   );
@@ -169,7 +169,7 @@ export default function Home() {
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true);
   const [leaderboardError, setLeaderboardError] = useState<string | null>(null);
 
-  // 백엔드로부터 라운드 정보 가져오기
+  // Fetch round information from backend
   const [serverRoundInfo, setServerRoundInfo] = useState<RoundInfo | null>(
     null
   );
@@ -807,20 +807,20 @@ export default function Home() {
   // handleSubmitTickets 함수에서 매개변수 설정 로직 개선
   const handleSubmitTickets = async () => {
     if (!isConnected || !accountAddress) {
-      toast.error("지갑을 연결해주세요.");
+      toast.error("Please connect your wallet.");
       return;
     }
     if (!isCorrectNetwork) {
       toast.error(
-        `네트워크를 ${
+        `Please switch to the ${
           targetChain?.name || `Chain ID: ${targetChainIdFromEnv}`
-        }로 변경해주세요.`
+        } network.`
       );
       return;
     }
     if (!lotteryAddress || !urukTokenAddress) {
       toast.error(
-        "컨트랙트 주소가 설정되지 않았습니다. 관리자에게 문의하세요."
+        "Contract addresses are not configured. Please contact support."
       );
       return;
     }
@@ -833,7 +833,7 @@ export default function Home() {
     // 라운드 ID 유효성 체크 추가
     if (currentRoundId === undefined) {
       toast.error(
-        "현재 라운드 정보를 가져올 수 없습니다. 페이지를 새로고침하세요."
+        "Could not retrieve current round information. Please refresh the page."
       );
       return;
     }
@@ -843,7 +843,7 @@ export default function Home() {
     // 2. 수량 확인
     const numQuantity = parseInt(quantity, 10);
     if (isNaN(numQuantity) || numQuantity <= 0) {
-      toast.error("유효한 수량을 입력하세요 (0보다 큰 정수).");
+      toast.error("Please enter a valid quantity (a positive integer).");
       return;
     }
 
@@ -851,7 +851,7 @@ export default function Home() {
 
     // 3. 토큰 정보 확인
     if (urukDecimals === undefined) {
-      toast.error("토큰 정보를 가져오는 중입니다. 잠시 후 다시 시도하세요.");
+      toast.error("Token information is loading. Please try again shortly.");
       return;
     }
 
@@ -876,17 +876,19 @@ export default function Home() {
       );
 
       // 5. 허용량 확인
-      const toastId = toast.loading("최신 토큰 허용량 확인 중...");
+      const toastId = toast.loading("Checking latest token allowance...");
       const { data: currentAllowance, isError: isRefetchError } =
         await refetchUrukAllowance();
 
       if (isRefetchError || typeof currentAllowance !== "bigint") {
-        toast.error("허용량 확인 실패. 다시 시도하세요.", { id: toastId });
+        toast.error("Failed to check allowance. Please try again.", {
+          id: toastId,
+        });
         setCurrentTransactionStep("error");
         return;
       }
 
-      toast.success("허용량 확인 완료!", { id: toastId });
+      toast.success("Allowance check complete!", { id: toastId });
       console.log(
         `[구매시작] 현재 허용량: ${formatUnits(
           currentAllowance,
@@ -927,7 +929,7 @@ export default function Home() {
     } catch (error: any) {
       console.error("[구매시작] 오류 발생:", error);
       toast.error(
-        `티켓 구매 준비 중 오류: ${error.message || "알 수 없는 오류"}`
+        `Error preparing ticket purchase: ${error.message || "Unknown error"}`
       );
       setCurrentTransactionStep("error");
     }
@@ -1345,16 +1347,18 @@ export default function Home() {
       (async () => {
         const toastId = "approve-tx";
         try {
-          toast.loading("토큰 사용 허용 트랜잭션 전송 중...", { id: toastId });
+          toast.loading("Sending token approval transaction...", {
+            id: toastId,
+          });
           await approveAsync(approveConfig.request);
           console.log("[Approve] 트랜잭션 전송 성공");
         } catch (error) {
           console.error("[Approve] 트랜잭션 전송 실패:", error);
           toast.error(
-            "토큰 승인 실패: " +
+            "Token approval failed: " +
               ((error as any)?.shortMessage ||
                 (error as Error)?.message ||
-                "Unknown"),
+                "Unknown error"),
             {
               id: toastId,
             }
@@ -1378,7 +1382,7 @@ export default function Home() {
   useEffect(() => {
     if (isSuccessApprove) {
       console.log("[Approve] 승인 완료, 티켓 구매 로직으로 이동");
-      toast.success("토큰 사용 허용 완료! 이제 티켓을 구매합니다.");
+      toast.success("Token approval complete! Proceeding to buy tickets.");
 
       // 기존 상태 초기화 후 구매 로직 재호출
       // setCurrentTransactionStep("preparing"); // 이 부분은 handleSubmitTickets에서 처리
@@ -1488,7 +1492,7 @@ export default function Home() {
           {/* UPDATED: Countdown Box - Total prize display modified */}
           <div className="bg-black/40 backdrop-blur-sm border border-purple-500/30 rounded-lg p-4 flex flex-col items-center justify-center shadow-lg shadow-purple-900/20 hover:shadow-purple-700/30 transition-shadow w-full flex-1">
             <h3 className="text-base font-medium text-purple-200 mb-1 font-joystix">
-              countdown
+              COUNTDOWN
             </h3>
             <div className="text-3xl font-bold text-white flex items-center mb-3 font-joystix">
               {isCountdownLoading ? (
@@ -1656,7 +1660,7 @@ export default function Home() {
           {/* Ticket ownership display (existing part) */}
           <div className="bg-black/30 px-4 py-2 rounded-md border border-purple-500/30">
             <p className="text-base font-medium text-purple-200">
-              My Ticket:{" "}
+              My Tickets:{" "}
               {!isClient || !accountAddress ? (
                 <span className="text-lg font-bold text-white animate-pulse">
                   --

@@ -1,26 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// 백엔드 BE URL (환경 변수 사용 권장)
+// Backend URL (using environment variable is recommended)
 const BACKEND_URL =
   process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
-// 리더보드 데이터를 가져오는 API 라우트
+// API route to fetch leaderboard data
 export async function GET(req: NextRequest) {
   const roundId = req.nextUrl.searchParams.get("roundId");
   if (!roundId) {
     return NextResponse.json(
-      { success: false, error: "roundId 파라미터가 필요합니다" },
+      { success: false, error: "'roundId' parameter is required" },
       { status: 400 }
     );
   }
 
   const requestId = `LEAD-${Math.floor(Math.random() * 100000)}`;
-  console.log(
-    `[Next API ${requestId}] /leaderboard?roundId=${roundId} 요청 시작`
-  );
+  // console.log(
+  //   `[Next API ${requestId}] /leaderboard?roundId=${roundId} request started`
+  // );
 
   try {
-    const backendUrl = `${BACKEND_URL}/leaders?roundId=${roundId}`;
+    // Assuming the backend endpoint is /api/leaderboard, adjust if different
+    const backendUrl = `${BACKEND_URL}/api/leaderboard?roundId=${roundId}`;
     const response = await fetch(backendUrl, {
       cache: "no-store",
       headers: {
@@ -31,24 +32,35 @@ export async function GET(req: NextRequest) {
     });
 
     if (!response.ok) {
-      throw new Error(`백엔드 응답 오류: ${response.status}`);
+      throw new Error(`Backend response error: ${response.status}`);
     }
 
     const data = await response.json();
-    console.log(
-      `[Next API ${requestId}] 백엔드 리더보드 수신 성공, length=${data?.length}`
-    );
-    return NextResponse.json({ success: true, leaderboard: data });
+    // console.log(
+    //   `[Next API ${requestId}] Received leaderboard from backend, length=${data?.leaderboard?.length}`
+    // );
+    // Ensure the response structure matches what the frontend expects
+    return NextResponse.json({
+      success: true,
+      roundId: data.roundId,
+      leaderboard: data.leaderboard,
+    });
   } catch (error) {
-    console.error(`[Next API ${requestId}] 백엔드 연결 실패:`, error);
-    // 폴백: 빈 배열 반환 (프론트엔드에서 "데이터 없음" 표시)
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error(
+      `[Next API ${requestId}] Backend connection failed:`,
+      errorMessage
+    );
+    // Fallback: return empty array (frontend should handle "no data")
     return NextResponse.json(
       {
         success: false,
-        error: "백엔드 연결 실패",
+        error: "Backend connection failed",
+        errorDetail: errorMessage,
         leaderboard: [],
       },
-      { status: 503 }
+      { status: 503 } // Service Unavailable
     );
   }
 }
