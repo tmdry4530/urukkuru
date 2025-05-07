@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 
 interface PageLayoutProps {
   children: ReactNode;
+  className?: string;
 }
 
 interface ParticleStyle {
@@ -19,7 +20,7 @@ interface ParticleStyle {
   animationDelay: string;
 }
 
-export function PageLayout({ children }: PageLayoutProps) {
+export function PageLayout({ children, className }: PageLayoutProps) {
   const [particleStyles, setParticleStyles] = useState<ParticleStyle[]>([]);
   const [gradientStyle, setGradientStyle] = useState<
     React.CSSProperties | undefined
@@ -53,7 +54,11 @@ export function PageLayout({ children }: PageLayoutProps) {
   const headerHeightPadding = "pt-16 md:pt-20"; // Mobile and desktop header heights might differ
 
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-b from-purple-900/5 to-black">
+    <div
+      className={`flex flex-col min-h-screen bg-gradient-to-b from-purple-900/5 to-black ${
+        className || ""
+      }`}
+    >
       {/* Background gradient effect */}
       <div
         className="absolute inset-0 bg-gradient-to-br from-purple-900/20 to-black/40 z-0"

@@ -13,13 +13,31 @@ export default function StoryPage() {
   }, []);
 
   const storyContent = {
-    title: "The Legend of URUK",
-    content:
-      'Around 4000 BCE, during the height of ancient Mesopotamian civilization, a legend tells of a mysterious cat that appeared in a prosperous city, bringing with it precious treasures.\n\nThe cat soon became a symbol of the city, and the people began to call it "Uruk."\n\nLater on, in honor of this mystical creature, the city itself was named "Uruk."',
+    title: "The Legend of Uruk",
+    content: `Do you know the legend of Uruk?
+
+Long ago, in a bustling city of ancient Mesopotamia, 
+a mysterious cat appeared. \\n\\n
+
+Its fur shimmered under the moonlight, 
+and wherever it walked, 
+it left behind small treasures, 
+astonishing the villagers. \\n\\n
+
+This mysterious cat had a very unique meow. \\n\\n
+
+"Uruk, Uruk, Uruk~" \\n\\n
+
+The townspeople were so captivated by this peculiar cat
+and its distinctive cry that they began calling it "Uruk." \\n\\n
+
+Eventually, the city itself adopted the name,
+forever commemorating the legendary cat
+that once bestowed treasures upon them.`,
   };
 
   return (
-    <PageLayout>
+    <PageLayout className="font-joystix">
       <div
         className={`max-w-4xl mx-auto w-full transition-opacity duration-1000 ease-in-out ${
           pageLoaded ? "opacity-100" : "opacity-0"
@@ -47,9 +65,11 @@ export default function StoryPage() {
             {storyContent.title}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
           </h3>
-          <p className="text-gray-200 leading-relaxed whitespace-pre-line">
-            {storyContent.content}
-          </p>
+          {storyContent.content.split("\\n\\n").map((paragraph, index) => (
+            <p key={index} className="text-gray-200 leading-relaxed">
+              {paragraph}
+            </p>
+          ))}
         </div>
       </div>
     </PageLayout>
