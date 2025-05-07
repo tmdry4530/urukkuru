@@ -14,14 +14,18 @@ export default function StoryPage() {
 
   const storyContent = {
     title: "The Legend of URUK",
-    content:
-      'Around 4000 BCE, during the height of ancient Mesopotamian civilization, a legend tells of a mysterious cat that appeared in a prosperous city, bringing with it precious treasures.\n\nThe cat soon became a symbol of the city, and the people began to call it "Uruk."\n\nLater on, in honor of this mystical creature, the city itself was named "Uruk."',
+    content: `A long time ago, around 4000 BCE, in the middle of ancient Mesopotamia, a mysterious cat suddenly appeared in a bustling city. Its fur seemed to shimmer under the moonlight, and wherever it walked, it left behind little treasures that amazed the people.
+
+  But the most curious thing was the sound it made—it would wander the streets at night, softly calling out:
+  "Uruk Uruk Uruk"
+
+  The people were so fascinated by this strange cat and its mysterious cry that they started calling it "Uruk." Before long, the city itself took on the name, forever honoring the legendary cat that had once watched over them.`,
   };
 
   return (
     <PageLayout>
       <div
-        className={`max-w-4xl mx-auto w-full transition-opacity duration-1000 ease-in-out ${
+        className={`max-w-4xl mx-auto w-full transition-opacity duration-1000 ease-in-out font-joystix ${
           pageLoaded ? "opacity-100" : "opacity-0"
         }`}
       >
