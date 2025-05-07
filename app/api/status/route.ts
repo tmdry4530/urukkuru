@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 // Backend server URL (using environment variable is recommended)
-const BACKEND_URL = "http://localhost:3001";
+const BACKEND_URL =
+  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:3001";
 
 // Request tracking counters
 let apiRequestCount = 0;
