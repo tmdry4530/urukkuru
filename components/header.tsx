@@ -43,6 +43,16 @@ const winners = [
     address: "0x219fEdB468660C8C761ff3e1e90D0b7d3c3dFAA1",
     amount: 624864,
   },
+  {
+    round: 3,
+    address: "0xb8f1bA7E145E33c0E7FDA17e7D078c096a9d1584",
+    amount: 1021986,
+  },
+  {
+    round: 4,
+    address: "0x658A88117237105Fb3E16B68Ca50EB7F76B0747F",
+    amount: 703677,
+  },
 ];
 
 // 주소 축약 함수
