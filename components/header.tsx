@@ -31,6 +31,33 @@ const urukTokenAddress = process.env.NEXT_PUBLIC_URUK_TOKEN as
   | undefined;
 const targetChainId = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || "10143", 10);
 
+// 승자 정보 배열
+const winners = [
+  {
+    round: 1,
+    address: "0x18Fa797f6588B06100a55826EA0B85720cAe458c",
+    amount: 127579,
+  },
+  {
+    round: 2,
+    address: "0x219fEdB468660C8C761ff3e1e90D0b7d3c3dFAA1",
+    amount: 624864,
+  },
+];
+
+// 주소 축약 함수
+const shortenAddress = (address: string) => {
+  if (!address || address.length < 10) return address;
+  return `${address.substring(0, 6)}...${address.substring(
+    address.length - 4
+  )}`;
+};
+
+// 수량 포맷팅 함수
+const formatAmount = (amount: number) => {
+  return amount.toLocaleString();
+};
+
 export function Header() {
   const [glowIntensity, setGlowIntensity] = useState(1);
   const [isClient, setIsClient] = useState(false);
@@ -120,95 +147,109 @@ export function Header() {
   const showUserBalance = isClient && isConnected && isCorrectNetwork;
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-md bg-[#1a0028]/80 border-b border-purple-500/30 px-4 py-2">
-      <nav className="max-w-7xl mx-auto flex items-center justify-between">
-        <Link href="/" className="flex items-center group">
-          <div className="relative w-8 h-8 mr-2 transform group-hover:scale-110 transition-transform">
-            <Image
-              src="/logo.png"
-              alt="URUK Logo"
-              width={32}
-              height={32}
-              className="object-contain"
-              style={{
-                filter: `drop-shadow(0 0 ${
-                  4 * glowIntensity
-                }px rgba(255, 0, 255, 0.8))`,
-              }}
-            />
-          </div>
-          <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 animate-gradient font-joystix">
-            URUK
-          </span>
-        </Link>
-
-        <div className="flex items-center space-x-4">
-          <div className="hidden md:flex items-center space-x-4">
-            <Link
-              href="/"
-              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
-            >
-              Home
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
-            </Link>
-            <Link
-              href="/tokenomics"
-              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
-            >
-              Tokenomics
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
-            </Link>
-            <Link
-              href="/story"
-              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
-            >
-              Story
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
-            </Link>
-            <a
-              href="https://www.kuru.io/trade/0x5d6506e92b0a1205bd717b66642e961edad0a884"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
-            >
-              Trade $URUK
-              <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
-            </a>
-          </div>
-
-          <div className="flex items-center space-x-1">
-            <div className="transform scale-75 md:scale-90">
-              <ConnectButton
-                accountStatus={{
-                  smallScreen: "avatar",
-                  largeScreen: "full",
-                }}
-                showBalance={{
-                  smallScreen: false,
-                  largeScreen: false, // Use custom balance display above
+    <>
+      <header className="sticky top-0 z-50 backdrop-blur-md bg-[#1a0028]/80 border-b border-purple-500/30 px-4 py-2">
+        <nav className="max-w-7xl mx-auto flex items-center justify-between">
+          <Link href="/" className="flex items-center group">
+            <div className="relative w-8 h-8 mr-2 transform group-hover:scale-110 transition-transform">
+              <Image
+                src="/logo.png"
+                alt="URUK Logo"
+                width={32}
+                height={32}
+                className="object-contain"
+                style={{
+                  filter: `drop-shadow(0 0 ${
+                    4 * glowIntensity
+                  }px rgba(255, 0, 255, 0.8))`,
                 }}
               />
             </div>
-          </div>
+            <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 animate-gradient font-joystix">
+              URUK
+            </span>
+          </Link>
 
-          <button className="md:hidden text-white">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
+          <div className="flex items-center space-x-4">
+            <div className="hidden md:flex items-center space-x-4">
+              <Link
+                href="/"
+                className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
+              >
+                Home
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
+              </Link>
+              <Link
+                href="/tokenomics"
+                className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
+              >
+                Tokenomics
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
+              </Link>
+              <Link
+                href="/story"
+                className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
+              >
+                Story
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
+              </Link>
+              <a
+                href="https://www.kuru.io/trade/0x5d6506e92b0a1205bd717b66642e961edad0a884"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative px-2 py-1 text-xs font-medium transition-colors hover:text-pink-400 group font-joystix"
+              >
+                Trade $URUK
+                <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-pink-500 to-purple-500 group-hover:w-full transition-all duration-300"></span>
+              </a>
+            </div>
+
+            <div className="flex items-center space-x-1">
+              <div className="transform scale-75 md:scale-90">
+                <ConnectButton
+                  accountStatus={{
+                    smallScreen: "avatar",
+                    largeScreen: "full",
+                  }}
+                  showBalance={{
+                    smallScreen: false,
+                    largeScreen: false, // Use custom balance display above
+                  }}
+                />
+              </div>
+            </div>
+
+            <button className="md:hidden text-white">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+          </div>
+        </nav>
+      </header>
+
+      {/* Announcement Bar - 승자 표시 */}
+      <div className="w-full bg-gradient-to-r from-pink-900/30 to-purple-900/30 backdrop-blur-sm py-3 px-4 text-center text-sm overflow-hidden font-joystix">
+        <div className="animate-marquee whitespace-nowrap">
+          {winners.map((winner, index) => (
+            <span key={index} className="mx-4">
+              {winner.round}Round winner: {shortenAddress(winner.address)}{" "}
+              {formatAmount(winner.amount)} $URUK
+            </span>
+          ))}
         </div>
-      </nav>
-    </header>
+      </div>
+    </>
   );
 }
